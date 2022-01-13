@@ -44,13 +44,26 @@ Please, do **not** put these data files into Git; they are big. Do **not** copy 
 
 2. Display the contents in the folders `core`, `hosp`, `icu`. Why are these data files distributed as `.csv.gz` files instead of `.csv` (comma separated values) files? Read the page <https://mimic.mit.edu/docs/iv/> to understand what's in each folder.
 
-**Solution** Content of folder `core` is
+**Solution** 
+Content of folder `core` is
 ```{bash}
-ls -l /mny/mimiciv/1.0/core
+ls -l /mnt/mimiciv/1.0/core
 ```
-
+Content of folder `hosp` is
+```{bash}
+ls -l /mnt/mimiciv/1.0/hosp
+```
+Content of folder `icu` is
+```{bash}
+ls -l /mnt/mimiciv/1.0/icu
+```
+Data files are stored in the `.csv.gz` format as they contain large quantity of data.
 
 3. Briefly describe what bash commands `zcat`, `zless`, `zmore`, and `zgrep` do.
+**Solution**
+`zcat` views the content of a zip file - similar to what `cat` do to a file. `zcat` does not decompress the zip file.  
+`zless` and `zmore` both view the the content of a zip file one line/page at a time and can go back and forth.
+`zgrep` returns the lines that match the given text/string in the zip file.
 
 4. What's the output of following bash script?
     ```{bash, eval=F}
@@ -62,6 +75,9 @@ ls -l /mny/mimiciv/1.0/core
 Display the number of lines in each data file using a similar loop.
 
 5. Display the first few lines of `admissions.csv.gz`. How many rows are in this data file? How many unique patients (identified by `subject_id`) are in this data file? (Hint: combine Linux commands `zcat`, `head`/`tail`, `awk`, `sort`, `uniq`, `wc`, and so on.)
+```{bash}
+zcat admissions.csv.gz | head
+```
 
 6. What are the possible values taken by each of the variable `admission_type`, `admission_location`, `insurance`, and `ethnicity`? Also report the count for each unique value of these variables. (Hint: combine Linux commands `zcat`, `head`/`tail`, `awk`, `uniq -c`, `wc`, and so on.)
 
@@ -106,3 +122,18 @@ Explain the output. Explain the meaning of `"$1"`, `"$2"`, and `"$3"` in this sh
 ### Q5. More fun with Linux
 
 Try following commands in Bash and interpret the results: `cal`, `cal 2021`, `cal 9 1752` (anything unusual?), `date`, `hostname`, `arch`, `uname -a`, `uptime`, `who am i`, `who`, `w`, `id`, `last | head`, `echo {con,pre}{sent,fer}{s,ed}`, `time sleep 5`, `history | tail`.
+**Solution**
+`cal` shows the calendar of current month.
+```{bash}
+cal 
+```
+
+`cal 2021` shows the calendar of the whole year in 2021.
+```{bash}
+cal 2021
+```
+
+`cal 2021` shows the calendar of the month on September in 1752.
+```{bash}
+cal 9 1752
+```
