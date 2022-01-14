@@ -106,6 +106,10 @@ Explain what `wget -nc` does. Do **not** put this text file `pg42671.txt` in Git
     echo 'hello, world' >> test2.txt
     ```
 
+**Answer:**
+If the output file (e.g., test1.txt or test2.txt in this case) is already existed, `>` will overwrite the original content by *'hello, world'*. On the other hand, `>>` simply appends *'hello, world'* to the original content. However, there is no difference between `>` and `>>` if the output file has not yet been created. 
+------
+
 3. Using your favorite text editor (e.g., `vi`), type the following and save the file as `middle.sh`:
     ```{bash eval=FALSE}
     #!/bin/sh
