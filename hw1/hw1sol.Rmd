@@ -88,6 +88,11 @@ zcat admissions.csv.gz | head
     wget -nc http://www.gutenberg.org/cache/epub/42671/pg42671.txt
     ```
 Explain what `wget -nc` does. Do **not** put this text file `pg42671.txt` in Git. Complete the following loop to tabulate the number of times each of the four characters is mentioned using Linux commands.
+
+**Answer: **  
+`wget` is a command used to download files to the local computer. `wget -nc` overwrites the local file when it is repeatedly downloaded.
+------
+
     ```{bash, eval=FALSE}
     wget -nc http://www.gutenberg.org/cache/epub/42671/pg42671.txt
     for char in Elizabeth Jane Lydia Darcy
@@ -105,7 +110,6 @@ Explain what `wget -nc` does. Do **not** put this text file `pg42671.txt` in Git
     ```{bash eval=FALSE}
     echo 'hello, world' >> test2.txt
     ```
-
 **Answer:**
 If the output file (e.g., test1.txt or test2.txt in this case) is already existed, `>` will overwrite the original content by *'hello, world'*. On the other hand, `>>` simply appends *'hello, world'* to the original content. However, there is no difference between `>` and `>>` if the output file has not yet been created. 
 ------
@@ -118,26 +122,56 @@ If the output file (e.g., test1.txt or test2.txt in this case) is already existe
     head -n "$2" "$1" | tail -n "$3"
     ```
 Using `chmod` make the file executable by the owner, and run 
+`chmod u+x middle.sh`
+
     ```{bash eval=FALSE}
     ./middle.sh pg42671.txt 20 5
     ```
 Explain the output. Explain the meaning of `"$1"`, `"$2"`, and `"$3"` in this shell script. Why do we need the first line of the shell script?
 
+
 ### Q5. More fun with Linux
 
 Try following commands in Bash and interpret the results: `cal`, `cal 2021`, `cal 9 1752` (anything unusual?), `date`, `hostname`, `arch`, `uname -a`, `uptime`, `who am i`, `who`, `w`, `id`, `last | head`, `echo {con,pre}{sent,fer}{s,ed}`, `time sleep 5`, `history | tail`.
-**Solution**
+**Answer**
 `cal` shows the calendar of current month.
 ```{bash}
 cal 
 ```
-
 `cal 2021` shows the calendar of the whole year in 2021.
 ```{bash}
 cal 2021
 ```
-
-`cal 2021` shows the calendar of the month on September in 1752.
+`cal 2021` shows the calendar of the month on September in 1752. Something unusual is that dates between September 3 to 13 are missing in the calendar printed. 
 ```{bash}
 cal 9 1752
 ```
+`date` shows current time and date.
+```{bash}
+date
+```
+`hostname` returns the name of the server, which is the DNS (Domain Name System).
+```{bash}
+hostname
+```
+`arch` returns machine architecture type.
+```{bash}
+arch
+```
+`uname -a`
+```{bash}
+uname -a
+```
+
+```{bash}
+
+```
+
+```{bash}
+
+```
+
+
+
+
+
