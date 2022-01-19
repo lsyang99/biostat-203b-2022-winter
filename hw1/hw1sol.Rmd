@@ -36,6 +36,7 @@ This exercise (and later in this course) uses the [MIMIC-IV data](https://mimic-
 Please see the links below for:
 - my CITI completion certificate <https://www.citiprogram.org/verify/?w86696599-1a6a-4280-8624-ebc48fb5df14-46526162>
 - my CITI completion report <https://www.citiprogram.org/verify/?k7b8d7272-21d4-418d-8cd8-22e7eb34d55f-46526162>
+------
 
 ## Q3. Linux Shell Commands
 
@@ -49,7 +50,7 @@ Please, do **not** put these data files into Git; they are big. Do **not** copy 
 
 2. Display the contents in the folders `core`, `hosp`, `icu`. Why are these data files distributed as `.csv.gz` files instead of `.csv` (comma separated values) files? Read the page <https://mimic.mit.edu/docs/iv/> to understand what's in each folder.
 
-**Solution** 
+**Answer:** 
 Content of folder `core` is
 ```{bash}
 ls -l /mnt/mimiciv/1.0/core
@@ -83,7 +84,7 @@ Display the number of lines in each data file using a similar loop.
 ```{bash}
 zcat admissions.csv.gz | head
 ```
-
+      
 6. What are the possible values taken by each of the variable `admission_type`, `admission_location`, `insurance`, and `ethnicity`? Also report the count for each unique value of these variables. (Hint: combine Linux commands `zcat`, `head`/`tail`, `awk`, `uniq -c`, `wc`, and so on.)
 
 ## Q4. Who's popular in Price and Prejudice
