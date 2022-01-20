@@ -79,6 +79,13 @@ Data files are stored in the `.csv.gz` format as they contain large quantity of 
       done
     ```
 Display the number of lines in each data file using a similar loop.
+    ```{bash, eval=F}
+    for datafile in /mnt/mimiciv/1.0/core/*.gz
+      do
+        awk 'END { print NR }' $datafile
+      done
+    ```
+
 
 5. Display the first few lines of `admissions.csv.gz`. How many rows are in this data file? How many unique patients (identified by `subject_id`) are in this data file? (Hint: combine Linux commands `zcat`, `head`/`tail`, `awk`, `sort`, `uniq`, `wc`, and so on.)
 ```{bash}
