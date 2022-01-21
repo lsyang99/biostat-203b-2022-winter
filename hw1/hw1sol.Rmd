@@ -10,7 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 Display machine information for reproducibility:
-```{r, eval=F}
+```{r}
 sessionInfo()
 ```
 
@@ -28,6 +28,8 @@ sessionInfo()
 
 5. After this course, you can make this repository public and use it to demonstrate your skill sets on job market.
 
+
+
 ## Q2. Data ethics training
 
 This exercise (and later in this course) uses the [MIMIC-IV data](https://mimic-iv.mit.edu), a freely accessible critical care database developed by the MIT Lab for Computational Physiology. Follow the instructions at <https://mimic.mit.edu/docs/gettingstarted/> to (1) complete the CITI `Data or Specimens Only Research` course and (2) obtain the PhysioNet credential for using the MIMIC-IV data. Display the verification links to your completion report and completion certificate here. (Hint: The CITI training takes a couple hours and the PhysioNet credentialing takes a couple days; do not leave it to the last minute.)
@@ -37,6 +39,8 @@ Please see the links below for:
 - my CITI completion certificate <https://www.citiprogram.org/verify/?w86696599-1a6a-4280-8624-ebc48fb5df14-46526162>
 - my CITI completion report <https://www.citiprogram.org/verify/?k7b8d7272-21d4-418d-8cd8-22e7eb34d55f-46526162>
 ------
+
+
 
 ## Q3. Linux Shell Commands
 
@@ -63,12 +67,13 @@ Content of folder `icu` is
 ```{bash}
 ls -l /mnt/mimiciv/1.0/icu
 ```
-Data files are stored in the `.csv.gz` format as they contain large quantity of data.
+A `.csv.gz` file is a compressed `.csv` with gzip utility, which is used to compress and decompress files. Data files are stored in the `.csv.gz` format as they contain large quantity of data separated by commas.
+------
 
 3. Briefly describe what bash commands `zcat`, `zless`, `zmore`, and `zgrep` do.
-**Solution**
+**Answer:**
 `zcat` views the content of a zip file - similar to what `cat` do to a file. `zcat` does not decompress the zip file.  
-`zless` and `zmore` both view the the content of a zip file one line/page at a time and can go back and forth.
+`zless` and `zmore` both view the content of a zip file one page at a time and can go back and forth.
 `zgrep` returns the lines that match the given text/string in the zip file.
 
 4. What's the output of following bash script?
@@ -78,8 +83,10 @@ Data files are stored in the `.csv.gz` format as they contain large quantity of 
         ls -l $datafile
       done
     ```
+**Answer: ** It shows all the files that ends with ".gz" in the folder `core`.
+
 Display the number of lines in each data file using a similar loop.
-    ```{bash, eval=F}
+    ```{bash}
     for datafile in /mnt/mimiciv/1.0/core/*.gz
       do
         awk 'END { print NR }' $datafile
@@ -87,12 +94,25 @@ Display the number of lines in each data file using a similar loop.
     ```
 
 
-5. Display the first few lines of `admissions.csv.gz`. How many rows are in this data file? How many unique patients (identified by `subject_id`) are in this data file? (Hint: combine Linux commands `zcat`, `head`/`tail`, `awk`, `sort`, `uniq`, `wc`, and so on.)
+5. Display the first few lines of `admissions.csv.gz`.   (Hint: combine Linux commands `zcat`, `head`/`tail`, `awk`, `sort`, `uniq`, `wc`, and so on.)
 ```{bash}
-zcat admissions.csv.gz | head
+zcat /mnt/mimiciv/1.0/core/admissions.csv.gz | head
 ```
-      
+How many rows are in this data file?
+```{bash}
+wc -l < /mnt/mimiciv/1.0/core/admissions.csv.gz  
+```
+How many unique patients (identified by `subject_id`) are in this data file?
+```{bash}
+# sort -u -t, -k1,1 /mnt/mimiciv/1.0/core/admissions.csv.gz
+sort /mnt/mimiciv/1.0/core/admissions.csv.gz | uniq -u
+```
+
+
 6. What are the possible values taken by each of the variable `admission_type`, `admission_location`, `insurance`, and `ethnicity`? Also report the count for each unique value of these variables. (Hint: combine Linux commands `zcat`, `head`/`tail`, `awk`, `uniq -c`, `wc`, and so on.)
+
+
+
 
 ## Q4. Who's popular in Price and Prejudice
 
@@ -101,9 +121,8 @@ zcat admissions.csv.gz | head
     wget -nc http://www.gutenberg.org/cache/epub/42671/pg42671.txt
     ```
 Explain what `wget -nc` does. Do **not** put this text file `pg42671.txt` in Git. Complete the following loop to tabulate the number of times each of the four characters is mentioned using Linux commands.
-
 **Answer: **  
-`wget` is a command used to download files to the local computer. `wget -nc` overwrites the local file when it is repeatedly downloaded.
+`wget` is a command used to download files to the local computer. `wget -nc` does NOT download the file if it has already existed (i.e. it avoids overwriting an existing file).
 ------
 
     ```{bash, eval=FALSE}
@@ -171,20 +190,53 @@ hostname
 ```{bash}
 arch
 ```
-`uname -a`
+With the OPTION `-a`, `uname -a` print ALL information, including but not limited to the kernel name, netweok node host name, kernel release and version, etc. 
 ```{bash}
 uname -a
 ```
+`uptime` tells current time, how long the server has been running, the number of logged-in users, and the load averages for the past 1, 5, 15 minutes.
+```{bash}
+uptime
+```
 
 ```{bash}
+who am i
+```
 
+`who` shows users who are currently loggin in the server.
+```{bash}
+who
+```
+
+`w` shows detailed information (including login time, IP address, acurrent process, etc.) of users who are currently logging in.
+```{bash}
+w
+```
+
+`id` returns the user and group IDs for myself.
+```{bash}
+id
+```
+
+`last | head` returns the latest 10 logged-in users and the time they logged in.
+```{bash}
+last | head
+```
+
+It displays a combination of three strings (demoted in `{}`) and prints out 8 different combinations.
+```{bash}
+echo {con,pre}{sent,fer}{s,ed}
+```
+
+```{bash}
+time sleep 5
+```
+
+```{bash}
+history | tail
 ```
 
 ```{bash}
 
 ```
-
-
-
-
 
