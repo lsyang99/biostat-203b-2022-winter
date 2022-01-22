@@ -34,17 +34,16 @@ sessionInfo()
 
 This exercise (and later in this course) uses the [MIMIC-IV data](https://mimic-iv.mit.edu), a freely accessible critical care database developed by the MIT Lab for Computational Physiology. Follow the instructions at <https://mimic.mit.edu/docs/gettingstarted/> to (1) complete the CITI `Data or Specimens Only Research` course and (2) obtain the PhysioNet credential for using the MIMIC-IV data. Display the verification links to your completion report and completion certificate here. (Hint: The CITI training takes a couple hours and the PhysioNet credentialing takes a couple days; do not leave it to the last minute.)
 
-**Answer:**
-Please see the links below for:
-- my CITI completion certificate <https://www.citiprogram.org/verify/?w86696599-1a6a-4280-8624-ebc48fb5df14-46526162>
-- my CITI completion report <https://www.citiprogram.org/verify/?k7b8d7272-21d4-418d-8cd8-22e7eb34d55f-46526162>
-------
+
+**Answer:**          
+Please see the links below for:        
+- my CITI completion certificate            <https://www.citiprogram.org/verify/?w86696599-1a6a-4280-8624-ebc48fb5df14-46526162>        
+- my CITI completion report         <https://www.citiprogram.org/verify/?k7b8d7272-21d4-418d-8cd8-22e7eb34d55f-46526162>        
 
 
 
 ## Q3. Linux Shell Commands
-
-1. 不用做The `/mnt/mimiciv/1.0` folder on teaching server contains data sets from MIMIC-IV. Refer to the documentation <https://mimic.mit.edu/docs/iv/> for details of data files.  
+1. The `/mnt/mimiciv/1.0` folder on teaching server contains data sets from MIMIC-IV. Refer to the documentation <https://mimic.mit.edu/docs/iv/> for details of data files.
     ```{bash}
     ls -l /mnt/mimiciv/1.0
     ```
@@ -54,36 +53,39 @@ Please, do **not** put these data files into Git; they are big. Do **not** copy 
 
 2. Display the contents in the folders `core`, `hosp`, `icu`. Why are these data files distributed as `.csv.gz` files instead of `.csv` (comma separated values) files? Read the page <https://mimic.mit.edu/docs/iv/> to understand what's in each folder.
 
-**Answer:** 
-Content of folder `core` is
+**Answer:**      
+A `.csv.gz` file is a compressed `.csv` with gzip utility, which is used to compress and decompress files. Data files are stored in the `.csv.gz` format as they contain large quantity of data separated by commas.        
+- Content of folder `core` is
 ```{bash}
 ls -l /mnt/mimiciv/1.0/core
 ```
-Content of folder `hosp` is
+- Content of folder `hosp` is
 ```{bash}
 ls -l /mnt/mimiciv/1.0/hosp
 ```
-Content of folder `icu` is
+- Content of folder `icu` is
 ```{bash}
 ls -l /mnt/mimiciv/1.0/icu
 ```
-A `.csv.gz` file is a compressed `.csv` with gzip utility, which is used to compress and decompress files. Data files are stored in the `.csv.gz` format as they contain large quantity of data separated by commas.
-------
 
-3. Briefly describe what bash commands `zcat`, `zless`, `zmore`, and `zgrep` do.
-**Answer:**
+    
+3. Briefly describe what bash commands `zcat`, `zless`, `zmore`, and `zgrep` do.       
+**Answer:**        
 `zcat` views the content of a zip file - similar to what `cat` do to a file. `zcat` does not decompress the zip file.  
 `zless` and `zmore` both view the content of a zip file one page at a time and can go back and forth.
 `zgrep` returns the lines that match the given text/string in the zip file.
-
-4. What's the output of following bash script?
+        
+        
+4. What's the output of following bash script?       
+**Answer: **         
+It shows all the files that ends with ".gz" in the folder `core`.
     ```{bash, eval=F}
     for datafile in /mnt/mimiciv/1.0/core/*.gz
       do
         ls -l $datafile
       done
     ```
-**Answer: ** It shows all the files that ends with ".gz" in the folder `core`.
+
 
 Display the number of lines in each data file using a similar loop.
     ```{bash}
@@ -92,9 +94,10 @@ Display the number of lines in each data file using a similar loop.
         awk 'END { print NR }' $datafile
       done
     ```
+        
 
-
-5. Display the first few lines of `admissions.csv.gz`.   (Hint: combine Linux commands `zcat`, `head`/`tail`, `awk`, `sort`, `uniq`, `wc`, and so on.)
+5. Display the first few lines of `admissions.csv.gz`.   (Hint: combine Linux commands `zcat`, `head`/`tail`, `awk`, `sort`, `uniq`, `wc`, and so on.)       
+**Answer: **         
 ```{bash}
 zcat /mnt/mimiciv/1.0/core/admissions.csv.gz | head
 ```
@@ -104,13 +107,28 @@ wc -l < /mnt/mimiciv/1.0/core/admissions.csv.gz
 ```
 How many unique patients (identified by `subject_id`) are in this data file?
 ```{bash}
-# sort -u -t, -k1,1 /mnt/mimiciv/1.0/core/admissions.csv.gz
-sort /mnt/mimiciv/1.0/core/admissions.csv.gz | uniq -u
+awk -F, '{ print $1 }' <(zcat /mnt/mimiciv/1.0/core/admissions.csv.gz) | tail -n +2 | uniq | wc -l
 ```
+         
 
-
-6. What are the possible values taken by each of the variable `admission_type`, `admission_location`, `insurance`, and `ethnicity`? Also report the count for each unique value of these variables. (Hint: combine Linux commands `zcat`, `head`/`tail`, `awk`, `uniq -c`, `wc`, and so on.)
-
+6. What are the possible values taken by each of the variable `admission_type`, `admission_location`, `insurance`, and `ethnicity`? Also report the count for each unique value of these variables. (Hint: combine Linux commands `zcat`, `head`/`tail`, `awk`, `uniq -c`, `wc`, and so on.)       
+**Answer:**       
+`admission_type`
+```{bash}
+awk -F, '{ print $6 }' <(zcat /mnt/mimiciv/1.0/core/admissions.csv.gz) | tail -n +2  | sort | uniq -c
+```
+`admission_location`
+```{bash}
+awk -F, '{ print $7 }' <(zcat /mnt/mimiciv/1.0/core/admissions.csv.gz) | tail -n +2  | sort | uniq -c
+```
+`insurance`
+```{bash}
+awk -F, '{ print $9 }' <(zcat /mnt/mimiciv/1.0/core/admissions.csv.gz) | tail -n +2  | sort | uniq -c
+```
+`ethnicity`
+```{bash}
+awk -F, '{ print $12 }' <(zcat /mnt/mimiciv/1.0/core/admissions.csv.gz) | tail -n +2 | sort | uniq -c
+```
 
 
 
@@ -120,20 +138,21 @@ sort /mnt/mimiciv/1.0/core/admissions.csv.gz | uniq -u
     ```{bash, eval=FALSE}
     wget -nc http://www.gutenberg.org/cache/epub/42671/pg42671.txt
     ```
-Explain what `wget -nc` does. Do **not** put this text file `pg42671.txt` in Git. Complete the following loop to tabulate the number of times each of the four characters is mentioned using Linux commands.
-**Answer: **  
-`wget` is a command used to download files to the local computer. `wget -nc` does NOT download the file if it has already existed (i.e. it avoids overwriting an existing file).
-------
-
-    ```{bash, eval=FALSE}
+        
+    
+Explain what `wget -nc` does. Do **not** put this text file `pg42671.txt` in Git. Complete the following loop to tabulate the number of times each of the four characters is mentioned using Linux commands.           
+**Answer: **          
+`wget` is a command used to download files to the local computer. `wget -nc` does NOT download the file if it has already existed (i.e. it avoids overwriting an existing file).        
+    ```{bash}
     wget -nc http://www.gutenberg.org/cache/epub/42671/pg42671.txt
     for char in Elizabeth Jane Lydia Darcy
     do
       echo $char:
-      # some commands here
+      grep $char pg42671.txt | wc -l
     done
     ```
-
+        
+        
 2. What's the difference between the following two commands?
     ```{bash eval=FALSE}
     echo 'hello, world' > test1.txt
@@ -142,9 +161,9 @@ Explain what `wget -nc` does. Do **not** put this text file `pg42671.txt` in Git
     ```{bash eval=FALSE}
     echo 'hello, world' >> test2.txt
     ```
-**Answer:**
+**Answer:**         
 If the output file (e.g., test1.txt or test2.txt in this case) is already existed, `>` will overwrite the original content by *'hello, world'*. On the other hand, `>>` simply appends *'hello, world'* to the original content. However, there is no difference between `>` and `>>` if the output file has not yet been created. 
-------
+
 
 3. Using your favorite text editor (e.g., `vi`), type the following and save the file as `middle.sh`:
     ```{bash eval=FALSE}
@@ -153,19 +172,25 @@ If the output file (e.g., test1.txt or test2.txt in this case) is already existe
     # Usage: bash middle.sh filename end_line num_lines
     head -n "$2" "$1" | tail -n "$3"
     ```
-Using `chmod` make the file executable by the owner, and run 
-`chmod u+x middle.sh`
-
-    ```{bash eval=FALSE}
-    ./middle.sh pg42671.txt 20 5
-    ```
-Explain the output. Explain the meaning of `"$1"`, `"$2"`, and `"$3"` in this shell script. Why do we need the first line of the shell script?
-
-
+Using `chmod` make the file executable by the owner,     
+**Answer:**         
+```{bash eval=FALSE}
+    chmod u+x middle.sh
+```
+and run:
+```{bash}
+    ./hw1/middle.sh pg42671.txt 20 5
+```
+Explain the output. Explain the meaning of `"$1"`, `"$2"`, and `"$3"` in this shell script. Why do we need the first line of the shell script?                     
+**Answer:**              
+It prints out the last five lines of the first 20 lines of the file. `"$1"` denotes the first parameter in the bash function, `"$2"` is the second, and `"$3"` is the third. The first line `!/bin/sh` tells the script to run in the `/bin/sh` shell.              
+       
+       
+       
 ### Q5. More fun with Linux
 
-Try following commands in Bash and interpret the results: `cal`, `cal 2021`, `cal 9 1752` (anything unusual?), `date`, `hostname`, `arch`, `uname -a`, `uptime`, `who am i`, `who`, `w`, `id`, `last | head`, `echo {con,pre}{sent,fer}{s,ed}`, `time sleep 5`, `history | tail`.
-**Answer**
+Try following commands in Bash and interpret the results: `cal`, `cal 2021`, `cal 9 1752` (anything unusual?), `date`, `hostname`, `arch`, `uname -a`, `uptime`, `who am i`, `who`, `w`, `id`, `last | head`, `echo {con,pre}{sent,fer}{s,ed}`, `time sleep 5`, `history | tail`.     
+**Answer:**              
 `cal` shows the calendar of current month.
 ```{bash}
 cal 
@@ -198,45 +223,35 @@ uname -a
 ```{bash}
 uptime
 ```
-
+`whoami` prints out my user name.
 ```{bash}
-who am i
+whoami
 ```
-
-`who` shows users who are currently loggin in the server.
+`who` shows every user who is currently loggin in the server.
 ```{bash}
 who
 ```
-
 `w` shows detailed information (including login time, IP address, acurrent process, etc.) of users who are currently logging in.
 ```{bash}
 w
 ```
-
 `id` returns the user and group IDs for myself.
 ```{bash}
 id
 ```
-
 `last | head` returns the latest 10 logged-in users and the time they logged in.
 ```{bash}
 last | head
 ```
-
-It displays a combination of three strings (demoted in `{}`) and prints out 8 different combinations.
+`echo {con,pre}{sent,fer}{s,ed}` displays a combination of three strings (demoted in `{}`) and prints out 8 different combinations.
 ```{bash}
 echo {con,pre}{sent,fer}{s,ed}
 ```
-
+`time sleep 5` suspends the script to run next command for a designated time - 5 seconds in this case.
 ```{bash}
 time sleep 5
 ```
-
+`history | tail` returns the latest 10 commands I ran.
 ```{bash}
 history | tail
 ```
-
-```{bash}
-
-```
-
