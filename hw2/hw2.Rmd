@@ -42,10 +42,15 @@ There are quite a few utilities in R for reading plain text data files. Let us t
 
 Which function is fastest? Is there difference in the (default) parsed data types? (Hint: R function `system.time` measures run times.)    
 **Answer:**    
+From the *elapsed* shown below we know that `fread` and `read_csv` runs much faster than `read.csv`, and `fread` runs the fastest. Data types differ depending on the function used. 
 ```{r}
-system.time(read.csv("admissions.csv.gz"))
-system.time(read_csv("admissions.csv.gz"))
-system.time(fread("admissions.csv.gz"))
+path <- "/mnt/mimiciv/1.0/core/admissions.csv.gz"
+system.time(d1 <- read.csv(path))
+class(d1)
+system.time(d2 <- read_csv(path))
+class(d2)
+system.time(d3 <- fread(path))
+class(d3)
 ```
 For later questions, we stick to the tidyverse.
 
