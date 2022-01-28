@@ -42,7 +42,7 @@ There are quite a few utilities in R for reading plain text data files. Let us t
 
 Which function is fastest? Is there difference in the (default) parsed data types? (Hint: R function `system.time` measures run times.)    
 **Answer:**    
-From the *elapsed* shown below we know that `fread` and `read_csv` runs much faster than `read.csv`, and `fread` runs the fastest. Data types differ depending on the function used. 
+From the *elapsed* shown below we know that `fread` and `read_csv` runs much faster than `read.csv`, and `fread` runs the fastest. Data types differ depending on the function used. `read.csv` gives a `data.frame` class, `read_csv` gives a `tibble` class, and `fread` gives a `data.table` class.
 ```{r}
 path <- "/mnt/mimiciv/1.0/core/admissions.csv.gz"
 system.time(d1 <- read.csv(path))
@@ -53,6 +53,7 @@ system.time(d3 <- fread(path))
 class(d3)
 ```
 For later questions, we stick to the tidyverse.
+
 
 ## Q2. ICU stays
 
@@ -69,10 +70,28 @@ system(
 ```
 
 1. Import `icustatys.csv.gz` as a tibble `icustays_tble`. 
+```{r}
+icustays_tble <- read_csv("/mnt/mimiciv/1.0/icu/icustays.csv.gz")
+```
 
 2. How many unique `subject_id`? Can a `subject_id` have multiple ICU stays? 
+```{r}
+# test 1
+unique(icustays_tble$subject_id) %>% length
+
+# 2
+icustays_tble %>% 
+  select(subject_id) %>% 
+  unique %>% 
+  count
+```
 
 3. For each `subject_id`, let's only keep the first ICU stay in the tibble `icustays_tble`.
+```{r}
+distinct(icustays_tble, subject_id, .keep_all = TRUE) %>%
+  group_by(subject_id) %>% 
+  filter(intime == min(intime))
+```
 
 ## Q3. `admission` data
 
@@ -89,8 +108,24 @@ system(
 ```
 
 1. Import `admissions.csv.gz` as a tibble `admissions_tble`.
+```{r}
+admissions_tble <- read_csv("/mnt/mimiciv/1.0/core/admissions.csv.gz")
+```
 
 2. Let's only keep the admissions that have a match in `icustays_tble` according to `subject_id` and `hadmi_id`.
+```{r}
+str(admissions_tble)
+# test 1
+admissions_tble %>% 
+ cfilter(.data[["subject_id"]] == .data[["hadm_id"]])  # 0
+# test 2
+admissions_tble %>% 
+  mutate(
+    subject_id1 = as.character(subject_id),
+    hadm_id1    = as.character(hadm_id)
+  ) %>% 
+  filter(.data[["subject_id1"]] == .data[["hadm_id1"]])
+```
 
 3. Summarize the following variables by graphics. 
 
@@ -99,6 +134,13 @@ system(
 - admission month day  
 - admission week day  
 - admission hour (anything unusual?)  
+```{r}
+admissions_tble %>% 
+  group_by(admittime) %>% 
+  summarise() %>% 
+  ggplot
+
+```
 
 ## Q4. `patients` data
 
