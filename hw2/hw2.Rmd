@@ -112,12 +112,12 @@ system(
 admissions_tble <- read_csv("/mnt/mimiciv/1.0/core/admissions.csv.gz")
 ```
 
-2. Let's only keep the admissions that have a match in `icustays_tble` according to `subject_id` and `hadmi_id`.
+2. Let's only keep the admissions that have a match in `icustays_tble` according to `subject_id` and `hadm_id`.
 ```{r}
 str(admissions_tble)
 # test 1
 admissions_tble %>% 
- cfilter(.data[["subject_id"]] == .data[["hadm_id"]])  # 0
+ filter(.data[["subject_id"]] == .data[["hadm_id"]])  # 0
 # test 2
 admissions_tble %>% 
   mutate(
@@ -127,20 +127,68 @@ admissions_tble %>%
   filter(.data[["subject_id1"]] == .data[["hadm_id1"]])
 ```
 
-3. Summarize the following variables by graphics. 
-
+3. Summarize the following variables by graphics.    
 - admission year  
-- admission month  
+```{r}
+admissions_tble %>% 
+  mutate(year = year(admittime)) %>% 
+  ggplot(aes(x = year)) +
+  geom_bar() +
+  theme_bw() +
+  ggtitle("Admission Year") + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+- admission month
+```{r}
+admissions_tble %>% 
+  mutate(month = month(admittime)) %>% 
+  ggplot(aes(x = month)) +
+  geom_bar(fill = "grey60") +
+  geom_text(stat = "count", aes(label = ..count..), vjust = 1.5) +
+  scale_x_continuous(breaks = seq(1, 12, 1)) +
+  theme_bw() +
+  ggtitle("Admission Month") + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
 - admission month day  
-- admission week day  
+```{r}
+admissions_tble %>% 
+  mutate(mday = mday(admittime)) %>% 
+  ggplot(aes(x = mday)) + 
+  geom_bar() +
+  scale_x_continuous(breaks = seq(1, 31, 5)) +
+  theme_bw() +
+  ggtitle("Admission Month Day") + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
 - admission hour (anything unusual?)  
 ```{r}
 admissions_tble %>% 
-  group_by(admittime) %>% 
-  summarise() %>% 
-  ggplot
-
+  mutate(mday = mday(admittime)) %>% 
+  ggplot(aes(x = mday)) + 
+  geom_bar() +
+  scale_x_continuous(breaks = seq(1, 24, 5)) +
+  theme_bw() +
+  ggtitle("Admission Hour") + 
+  theme(plot.title = element_text(hjust = 0.5))
 ```
+
+- admission week day  
+```{r}
+admissions_tble %>% 
+  mutate(wday = wday(admittime, label = TRUE)) %>% 
+  ggplot(aes(x = wday)) + 
+  geom_bar(fill = "grey60") +
+  geom_text(stat = "count", aes(label = ..count..), vjust = 1.5) +
+  theme_bw() +
+  ggtitle("Admission Week Day") + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
 
 ## Q4. `patients` data
 
@@ -157,8 +205,34 @@ system(
 ```
 
 1. Import `patients.csv.gz` (<https://mimic.mit.edu/docs/iv/modules/core/patients/>) as a tibble `patients_tble` and only keep the patients who have a match in `icustays_tble` (according to `subject_id`).
+```{r}
+patients_tble0 <- read_csv("/mnt/mimiciv/1.0/core/patients.csv.gz")
+IDs <- unique(icustays_tble$subject_id)
+patients_tble <- patients_tble0 %>% 
+  filter(subject_id %in% IDs)
+```
 
-2. Summarize variables `gender` and `anchor_age`, and explain any patterns you see.
+2. Summarize variables `gender` and `anchor_age`, and explain any patterns you see.     
+Based on the summary table and plot below, the total number of female is more than male. It appears that age distribution is generally left-skewed in both male and female. The count at the age of 91 is extremely high in both gender.
+```{r}
+patients_tble %>% 
+  group_by(gender) %>%
+  summarise(
+    count = n(),
+    min_age = min(anchor_age),
+    mean_age = mean(anchor_age),
+    median_age = median(anchor_age),
+    max_age = max(anchor_age)
+  )
+
+patients_tble %>% 
+  ggplot(aes(x = anchor_age, fill = gender)) + 
+  geom_bar() +
+  scale_x_continuous(breaks = seq(18, 92, 5)) +
+  theme_bw() +
+  labs(title = "Age Summary by Gender", x = "age") + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
 
 ## Q5. Lab results
 
