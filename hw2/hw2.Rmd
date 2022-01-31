@@ -114,17 +114,11 @@ admissions_tble <- read_csv("/mnt/mimiciv/1.0/core/admissions.csv.gz")
 
 2. Let's only keep the admissions that have a match in `icustays_tble` according to `subject_id` and `hadm_id`.
 ```{r}
-str(admissions_tble)
-# test 1
+S_IDs <- unique(icustays_tble$subject_id)
+H_IDs <- unique(icustays_tble$hadm_id)
+
 admissions_tble %>% 
- filter(.data[["subject_id"]] == .data[["hadm_id"]])  # 0
-# test 2
-admissions_tble %>% 
-  mutate(
-    subject_id1 = as.character(subject_id),
-    hadm_id1    = as.character(hadm_id)
-  ) %>% 
-  filter(.data[["subject_id1"]] == .data[["hadm_id1"]])
+  filter(subject_id %in% S_IDs & hadm_id %in% H_IDs)
 ```
 
 3. Summarize the following variables by graphics.    
@@ -164,7 +158,7 @@ admissions_tble %>%
   theme(plot.title = element_text(hjust = 0.5))
 ```
 
-- admission hour (anything unusual?)  
+- admission hour (anything unusual?)  **未完成**
 ```{r}
 admissions_tble %>% 
   mutate(mday = mday(admittime)) %>% 
@@ -207,7 +201,7 @@ system(
 1. Import `patients.csv.gz` (<https://mimic.mit.edu/docs/iv/modules/core/patients/>) as a tibble `patients_tble` and only keep the patients who have a match in `icustays_tble` (according to `subject_id`).
 ```{r}
 patients_tble0 <- read_csv("/mnt/mimiciv/1.0/core/patients.csv.gz")
-IDs <- unique(icustays_tble$subject_id)
+S_IDs <- unique(icustays_tble$subject_id)
 patients_tble <- patients_tble0 %>% 
   filter(subject_id %in% IDs)
 ```
@@ -260,13 +254,43 @@ system(
 ```
 
 1. Find how many rows are in `labevents.csv.gz`.
+```{r}
+labevents_all <- read_csv("/mnt/mimiciv/1.0/hosp/labevents.csv.gz", 
+                          col_select = 1, lazy = TRUE)
+count(labevents_all)
+```
 
 2. We are interested in the lab measurements of creatinine (50912), potassium (50971), sodium (50983), chloride (50902), bicarbonate (50882), hematocrit (51221), white blood cell count (51301), glucose (50931), magnesium (50960), and calcium (50893). Retrieve a subset of `labevents.csv.gz` only containing these items for the patients in `icustays_tble` as a tibble `labevents_tble`. 
 
     Hint: `labevents.csv.gz` is a data file too big to be read in by the `read_csv` function in its default setting. Utilize the `col_select` and `lazy` options in the `read_csv` function to reduce the memory burden.
+```{r}
+labevents <- read_csv("/mnt/mimiciv/1.0/hosp/labevents_filtered_itemid.csv.gz",
+                      lazy = TRUE)
+dim(labevents) # 30198826 
+labevents <- labevents %>% 
+  filter(subject_id %in% S_IDs & 
+             itemid %in% c(50912, 50971, 50983, 50902, 50882, 51221, 51301, 
+                           50931, 50960, 50893)) # 16698462
+```
 
 3. Further restrict `labevents_tble` to the first lab measurement during the ICU stay. 
+```{r}
+labevents <- labevents %>% 
+  group_by(subject_id) %>% 
+  filter(charttime == min(charttime))
+```
 4. Summarize the lab measurements by appropriate numerics and graphics. 
+```{r}
+# labevents_s <- labevents %>%
+#   mutate(r = row_number()) %>%
+#   pivot_wider(names_from = "itemid", values_from = "valuenum") %>%
+#   select( - r)
+labevents %>% 
+  group_by(itemid) %>% 
+  summarise()
+
+```
+
 
 ## Q6. Vitals from charted events
 
@@ -292,7 +316,8 @@ system(
 ```
 
 1. We are interested in the vitals for ICU patients: heart rate (220045), mean non-invasive blood pressure (220181), systolic non-invasive blood pressure (220179), body temperature in Fahrenheit (223761), and respiratory rate (220210). Retrieve a subset of `chartevents.csv.gz` only containing these items for the patients in `icustays_tble` as a tibble `chartevents_tble`.
-
+```{r}
+```
 2. Further restrict `chartevents_tble` to the first vital measurement during the ICU stay. 
 
 3. Summarize these vital measurements by appropriate numerics and graphics. 
