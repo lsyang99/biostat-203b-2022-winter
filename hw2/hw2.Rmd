@@ -159,12 +159,13 @@ admissions_tble %>%
 ```
 
 - admission hour (anything unusual?)  **未完成**
+The hour start from `0` to `23`.
 ```{r}
 admissions_tble %>% 
-  mutate(mday = mday(admittime)) %>% 
-  ggplot(aes(x = mday)) + 
+  mutate(hour = hour(admittime)) %>% 
+  ggplot(aes(x = hour)) + 
   geom_bar() +
-  scale_x_continuous(breaks = seq(1, 24, 5)) +
+  scale_x_continuous(breaks = seq(0, 23, 1)) +
   theme_bw() +
   ggtitle("Admission Hour") + 
   theme(plot.title = element_text(hjust = 0.5))
@@ -228,6 +229,8 @@ patients_tble %>%
   theme(plot.title = element_text(hjust = 0.5))
 ```
 
+
+
 ## Q5. Lab results
 
 `labevents.csv.gz` (<https://mimic.mit.edu/docs/iv/modules/hosp/labevents/>) contains all laboratory measurements for patients. The first 10 lines are
@@ -264,13 +267,13 @@ count(labevents_all)
 
     Hint: `labevents.csv.gz` is a data file too big to be read in by the `read_csv` function in its default setting. Utilize the `col_select` and `lazy` options in the `read_csv` function to reduce the memory burden.
 ```{r}
-labevents <- read_csv("/mnt/mimiciv/1.0/hosp/labevents_filtered_itemid.csv.gz",
-                      lazy = TRUE)
-dim(labevents) # 30198826 
-labevents <- labevents %>% 
+labevents0 <- read_csv("/mnt/mimiciv/1.0/hosp/labevents_filtered_itemid.csv.gz",
+                       lazy = TRUE)
+dim(labevents0) # 30198826 
+labevents <- labevents0 %>%  
   filter(subject_id %in% S_IDs & 
              itemid %in% c(50912, 50971, 50983, 50902, 50882, 51221, 51301, 
-                           50931, 50960, 50893)) # 16698462
+                           50931, 50960, 50893))  # 16698462
 ```
 
 3. Further restrict `labevents_tble` to the first lab measurement during the ICU stay. 
@@ -279,7 +282,7 @@ labevents <- labevents %>%
   group_by(subject_id) %>% 
   filter(charttime == min(charttime))
 ```
-4. Summarize the lab measurements by appropriate numerics and graphics. 
+4. Summarize the lab measurements by appropriate numerics and graphics. **未完成**
 ```{r}
 # labevents_s <- labevents %>%
 #   mutate(r = row_number()) %>%
@@ -317,17 +320,45 @@ system(
 
 1. We are interested in the vitals for ICU patients: heart rate (220045), mean non-invasive blood pressure (220181), systolic non-invasive blood pressure (220179), body temperature in Fahrenheit (223761), and respiratory rate (220210). Retrieve a subset of `chartevents.csv.gz` only containing these items for the patients in `icustays_tble` as a tibble `chartevents_tble`.
 ```{r}
+chart <- read_csv("/mnt/mimiciv/1.0/icu/chartevents_filtered_itemid.csv.gz",
+                  lazy = TRUE)
+chart  # 23,679,058
+chartevents_tble <- chart %>%   # 23,679,058
+  filter(subject_id %in% S_IDs & 
+         itemid %in% c(220045, 220181, 220179,223761, 220210))
 ```
 2. Further restrict `chartevents_tble` to the first vital measurement during the ICU stay. 
+```{r}
+chartevents_tble <- chartevents_tble %>% 
+  group_by(subject_id) %>% 
+  filter(charttime == min(charttime))
+```
 
 3. Summarize these vital measurements by appropriate numerics and graphics. 
-
+```{r}
+chartevents_tble
+```
 ## Q7. Putting things together
 
 Let us create a tibble `mimic_icu_cohort` for all ICU stays, where rows are  
 
 - first ICU stay of each unique adult (age at admission > 18)
+```{r}
+# first ICU stay
 
+admissions_tble <- admissions_tble %>% 
+  mutate(mort = (deathtime - admittime)/60/60/24,
+         thirty_day_mort = ifelse(mort > 30, 1, 0)) 
+
+mimic_icu_cohort <- 
+  left_join(icustays_tble, patients_tble, key = "subject_id") %>% 
+  left_join(., admissions_tble, key = "subject_id") %>% 
+  filter(anchor_age > 18)
+
+  
+# calculation of admission age
+mimic_icu_cohort
+```
 and columns contain at least following variables  
 
 - all variables in `icustays.csv.gz`  
