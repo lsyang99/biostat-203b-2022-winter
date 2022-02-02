@@ -18,6 +18,7 @@ knitr::opts_chunk$set(echo = TRUE, cache = TRUE, cache.lazy = FALSE)
 library(tidyverse)
 library(data.table)
 library(lubridate)
+library(plyr)
 ```
 
 ```{r}
@@ -79,18 +80,44 @@ icustays_tble <- read_csv("/mnt/mimiciv/1.0/icu/icustays.csv.gz")
 # test 1
 unique(icustays_tble$subject_id) %>% length
 
-# 2
-icustays_tble %>% 
-  select(subject_id) %>% 
-  unique %>% 
-  count
+# # 2
+# icustays_tble %>% 
+#   select(subject_id) %>% 
+#   unique %>% 
+#   count
 ```
 
 3. For each `subject_id`, let's only keep the first ICU stay in the tibble `icustays_tble`.
 ```{r}
-distinct(icustays_tble, subject_id, .keep_all = TRUE) %>%
+# 1.
+icustays_tble <- icustays_tble %>% 
   group_by(subject_id) %>% 
-  filter(intime == min(intime))
+  filter(intime == min(intime)) %>% 
+  ungroup()
+
+
+# 若要用arrange 須先將intime拆成個個時間變項一個變數...
+icustays_tble %>% 
+  mutate(intime = as_datetime(intime)) %>% 
+  drop_na(intime)
+  group_by(subject_id) %>% 
+  arrange(intime, .by_group = TRUE)
+  
+
+
+icustays_tble <- icustays_tble %>% 
+  mutate(intime = as.Date(intime, format = "%Y-%m-%d %H:%M:%S")) %>%
+  na.omit(intime)
+  group_by(subject_id) %>% 
+  arrange(intime, .by_group = TRUE)
+icustays_tble[-c(5811797460, 5694947820, 5304682440, 4853903700, 7274709180), ] %>% 
+  group_by(subject_id) %>% 
+  arrange(intime, .by_group = TRUE) %>% 
+  slice_head(n = 1) %>% 
+  ungroup()
+icustays_tble[-c(5811797460, 5694947820, 5304682440, 4853903700, 7274709180), ]
+desc(intime)
+drop_na(icustays_tble)
 ```
 
 ## Q3. `admission` data
@@ -114,11 +141,17 @@ admissions_tble <- read_csv("/mnt/mimiciv/1.0/core/admissions.csv.gz")
 
 2. Let's only keep the admissions that have a match in `icustays_tble` according to `subject_id` and `hadm_id`.
 ```{r}
-S_IDs <- unique(icustays_tble$subject_id)
-H_IDs <- unique(icustays_tble$hadm_id)
+# # test 1
+# S_IDs <- unique(icustays_tble$subject_id)
+# H_IDs <- unique(icustays_tble$hadm_id)
+# 
+# admissions_tble <- admissions_tble %>% 
+#   filter(subject_id %in% S_IDs & hadm_id %in% H_IDs)
+# admissions_tble
 
-admissions_tble %>% 
-  filter(subject_id %in% S_IDs & hadm_id %in% H_IDs)
+# test 2
+admissions_tble <- admissions_tble %>% 
+  semi_join(icustays_tble, by = "subject_id")
 ```
 
 3. Summarize the following variables by graphics.    
@@ -258,7 +291,7 @@ system(
 
 1. Find how many rows are in `labevents.csv.gz`.
 ```{r}
-labevents_all <- read_csv("/mnt/mimiciv/1.0/hosp/labevents.csv.gz", 
+labevents_all <- read_csv("/mnt/mimiciv/1.0/hosp/labevents_filtered_itemid.csv.gz", 
                           col_select = 1, lazy = TRUE)
 count(labevents_all)
 ```
@@ -267,20 +300,42 @@ count(labevents_all)
 
     Hint: `labevents.csv.gz` is a data file too big to be read in by the `read_csv` function in its default setting. Utilize the `col_select` and `lazy` options in the `read_csv` function to reduce the memory burden.
 ```{r}
+# use semi_join
 labevents0 <- read_csv("/mnt/mimiciv/1.0/hosp/labevents_filtered_itemid.csv.gz",
-                       lazy = TRUE)
+                       lazy = TRUE) %>% 
+  semi_join(icustays_tble, by = "subject_id")
 dim(labevents0) # 30198826 
 labevents <- labevents0 %>%  
   filter(subject_id %in% S_IDs & 
              itemid %in% c(50912, 50971, 50983, 50902, 50882, 51221, 51301, 
                            50931, 50960, 50893))  # 16698462
+semi_join()
+
 ```
 
 3. Further restrict `labevents_tble` to the first lab measurement during the ICU stay. 
 ```{r}
-labevents <- labevents %>% 
-  group_by(subject_id) %>% 
-  filter(charttime == min(charttime))
+# keep the subject_id within the icustays_tble
+labevents <- labevents %>%
+  # pull in intime
+  left_join(select(icustays_tble, subject_id, intime), key = "subject_id") %>%
+  # make sure measurement time not prior to first icu stay
+  filter(charttime >= intime) %>% 
+  # keep first lab measurement after intime
+  group_by(subject_id, itemid) %>% 
+  arrange(charttime, .by_group = TRUE) %>% 
+  slice_head(n = 1) %>% 
+  ungroup() %>% 
+  print(width = Inf)
+
+
+
+  filter(charttime == min(charttime))  # 529247 
+# make sure charttime should be >= intime of icustays_tble!!!
+# 先把
+# 希望使用這個 slice_min 但太慢 不要用
+# merge intime into the dataframe
+# sort charttime > slice_
 ```
 4. Summarize the lab measurements by appropriate numerics and graphics. **未完成**
 ```{r}
@@ -292,6 +347,9 @@ labevents %>%
   group_by(itemid) %>% 
   summarise()
 
+
+# just use summay()
+# for graphics: barplot, hist, boxplot!...
 ```
 
 
@@ -325,39 +383,85 @@ chart <- read_csv("/mnt/mimiciv/1.0/icu/chartevents_filtered_itemid.csv.gz",
 chart  # 23,679,058
 chartevents_tble <- chart %>%   # 23,679,058
   filter(subject_id %in% S_IDs & 
-         itemid %in% c(220045, 220181, 220179,223761, 220210))
+         itemid %in% c(220045, 220181, 220179, 223761, 220210))
 ```
 2. Further restrict `chartevents_tble` to the first vital measurement during the ICU stay. 
 ```{r}
 chartevents_tble <- chartevents_tble %>% 
   group_by(subject_id) %>% 
-  filter(charttime == min(charttime))
+  filter(charttime == min(charttime))  # 109913
 ```
 
 3. Summarize these vital measurements by appropriate numerics and graphics. 
 ```{r}
 chartevents_tble
 ```
-## Q7. Putting things together
 
+
+## Q7. Putting things together
+**create a variable for age at admission: age_hadm = anchor_age + year(admittime) - anchor_year **
 Let us create a tibble `mimic_icu_cohort` for all ICU stays, where rows are  
 
 - first ICU stay of each unique adult (age at admission > 18)
+**Answer:**       
+1. Define `thirty_day_mort`: `thirty_day_mort` = 0 if the patient didn't die or did die after 30 days upon admission.
+2. Make sure `itemid` contains lab measurements *(50912, 50971, 50983, 50902, 50882, 51221, 51301, 50931, 50960, 50893)* and vital measurements *(220045, 220181, 220179, 223761, 220210)*.
+Tibbles `patients_tble`, `admissions_tble`, `labevents`, and `chartevents_tble` have all been pre-processed in previous sections and only ICU patients are contained. We can use left 
 ```{r}
-# first ICU stay
+# calculate age of death
+mimic_icu_cohort <- mimic_icu_cohort %>% 
+  mutate(age_hadm = anchor_age + year(admittime) - anchor_year) %>% 
+  filter(age_hadm > 18) %>% 
+mutate(dod - admittime)
 
+as.Date(deathtime) - as.Date(admittime)
+# Dod = date of death in patient.csv
+
+
+# first ICU stay
+# Generate an indicator varaible: "thirty_day_mort"
 admissions_tble <- admissions_tble %>% 
-  mutate(mort = (deathtime - admittime)/60/60/24,
+  mutate(mort = ifelse(is.na(deathtime), 0, (deathtime - admittime)/60/60/24),
          thirty_day_mort = ifelse(mort > 30, 1, 0)) 
 
+# Filter admission age VVVVV
 mimic_icu_cohort <- 
   left_join(icustays_tble, patients_tble, key = "subject_id") %>% 
-  left_join(., admissions_tble, key = "subject_id") %>% 
+  left_join(., admissions_tble, key = c("subject_id")) %>% 
+  left_join(., labevents, key = "subject_id") %>% 
+  left_join(., chartevents_tble, key = "subject_id") %>%   
   filter(anchor_age > 18)
 
-  
-# calculation of admission age
-mimic_icu_cohort
+mimic_icu_cohort  # 76,433 × 28
+mimic_icu_cohort[which(mimic_icu_cohort$mort > 1), ]
+
+
+# # dim(icustays_tble): 76540     8
+# # dim(patients_tble): 53150     8
+# # dim(labevents):     529247    4
+# # dim(chart_first):   53150     8
+# 
+# ### semi_join
+# mimic_icu_cohort <- icustays_tble %>% 
+#   right_join(patients_tble, ., by = c("subject_id")) %>%
+#   semi_join(admissions_tble, ., by = c("subject_id")) %>%
+#   semi_join(labevents, ., by = "subject_id") %>%
+#   semi_join(chartevents_tble, ., by = c("subject_id"))
+#   
+# mimic_icu_cohort
+# mimic_icu_cohort %>% filter(anchor_age > 18)
+# # Check the measurements included
+# mimic_icu_cohort %>% distinct(itemid)
+# mimic_icu_cohort[which]
+# head(X)
+# # Join all datasets
+# mimic_icu_cohort <- 
+#   join_all(list(icustays_tble, patients_tble, admissions_tble, labevents, 
+#                 chart_first), by = "subject_id", type = "left") %>% 
+#   filter(anchor_age > 18)
+# 
+# 
+# mimic_icu_cohort %>% head
 ```
 and columns contain at least following variables  
 
@@ -368,14 +472,39 @@ and columns contain at least following variables
 - first vital measurements during ICU stay
 - an indicator variable `thirty_day_mort` whether the patient died within 30 days of hospital admission (30 day mortality)
 
+
+
 ## Q8. Exploratory data analysis (EDA)
 
 Summarize following information using appropriate numerics or graphs.
 
 - `thirty_day_mort` vs demographic variables (ethnicity, language, insurance, marital_status, gender, age at hospital admission)
+```{r}
+head(mimic_icu_cohort)
+mimic_icu_cohort %>% 
+  group_by(thirty_day_mort) %>% 
+  select(gender, anchor_age, ethnicity, language, marital_status) %>% 
+  summarise(sum = count(ethnicity))
+```
 
 - `thirty_day_mort` vs first lab measurements
+```{r}
+
+```
+
 
 - `thirty_day_mort` vs first vital measurements
 
 - `thirty_day_mort` vs first ICU unit
+
+
+
+
+
+
+
+
+
+
+
+
