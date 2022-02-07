@@ -19,6 +19,7 @@ library(tidyverse)
 library(data.table)
 library(lubridate)
 library(plyr)
+library(readr); library(magrittr); library(dplyr)
 ```
 
 ```{r}
@@ -98,14 +99,9 @@ icustays_tble <- icustays_tble %>%
   group_by(subject_id) %>% 
   filter(intime == min(intime)) %>% 
   ungroup()
-# sort?
+
 ########################################################
-# 若要用arrange 須先將intime拆成個個時間變項一個變數...
-icustays_tble %>% 
-  mutate(intime = as_datetime(intime)) %>% 
-  drop_na(intime)
-  group_by(subject_id) %>% 
-  arrange(intime, .by_group = TRUE)
+
   
 # 2.
 icustays_tble %>% 
@@ -137,6 +133,7 @@ admissions_tble <- read_csv("/mnt/mimiciv/1.0/core/admissions.csv.gz")
 
 2. Let's only keep the admissions that have a match in `icustays_tble` according to `subject_id` and `hadm_id`.
 ```{r}
+# use `semi_join` to keep rows that matches with icu patients
 admissions_tble <- admissions_tble %>% 
   semi_join(icustays_tble, by = c("subject_id", "hadm_id"))
 ```
@@ -221,7 +218,6 @@ system(
 
 1. Import `patients.csv.gz` (<https://mimic.mit.edu/docs/iv/modules/core/patients/>) as a tibble `patients_tble` and only keep the patients who have a match in `icustays_tble` (according to `subject_id`).
 ```{r}
-# use `semi_join` to keep rows that matches with icu patients
 patients_tble <- read_csv("/mnt/mimiciv/1.0/core/patients.csv.gz") %>% 
   semi_join(icustays_tble, by = "subject_id")
 ```
@@ -277,18 +273,17 @@ system(
 
 1. Find how many rows are in `labevents.csv.gz`.
 ```{r}
-labevents_all <- read_csv("/mnt/mimiciv/1.0/hosp/labevents_filtered_itemid.csv.gz", 
-                          col_select = 1, lazy = TRUE)
-count(labevents_all)
+labevents_tble <- 
+  read_csv("/mnt/mimiciv/1.0/hosp/labevents_filtered_itemid.csv.gz", 
+           lazy = TRUE) 
+count(labevents_tble)
 ```
 
 2. We are interested in the lab measurements of creatinine (50912), potassium (50971), sodium (50983), chloride (50902), bicarbonate (50882), hematocrit (51221), white blood cell count (51301), glucose (50931), magnesium (50960), and calcium (50893). Retrieve a subset of `labevents.csv.gz` only containing these items for the patients in `icustays_tble` as a tibble `labevents_tble`. 
 
     Hint: `labevents.csv.gz` is a data file too big to be read in by the `read_csv` function in its default setting. Utilize the `col_select` and `lazy` options in the `read_csv` function to reduce the memory burden.
 ```{r}
-labevents_tble <- 
-  read_csv("/mnt/mimiciv/1.0/hosp/labevents_filtered_itemid.csv.gz", 
-           lazy = TRUE) %>% 
+labevents_tble <- labevents_tble %>% 
   semi_join(icustays_tble, by = "subject_id")
 
 # filter itemid for specific lab measurements
@@ -320,32 +315,11 @@ labevents_tble <- labevents_tble %>%
   filter(charttime >= intime) %>% 
   # keep first lab measurement after intime
   group_by(subject_id, itemid) %>% 
-  filter(charttime == min(charttime)) %>% 
+  dplyr::arrange(charttime, .by_group = TRUE) %>% 
+  slice_head(n = 1) %>% 
   ungroup() %>% 
   print(width = Inf) %>% 
   write_rds("labevents_tble.rds")
-
-################################################################################
-#   arrange(charttime, .by_group = TRUE) %>% 
-#   slice_head(n = 1) %>% 
-#   ungroup()
-
-labevents_tble <- labevents_tble %>%
-  # pull in intime
-  left_join(select(icustays_tble, subject_id, intime), key = "subject_id") %>%
-  # make sure measurement time not prior to first icu stay
-  filter(charttime >= intime) %>% 
-  # keep first lab measurement after intime
-  group_by(subject_id, itemid) %>% 
-  dplyr::arrange(charttime, .by_group = TRUE) %>% 
-  slice_head(n = 1) %>% 
-  ungroup()
-  print(width = Inf) %>% 
-  write_rds("labevents_tble.rds")
-
-###
-labevents_tble[which(labevents_tble$subject_id == 10000980), ]
-
 ```
 4. Summarize the lab measurements by appropriate numerics and graphics.    
 This summary table includes the minimum, 25th percentile, mean, median, 75th percentile, maximum values, as well as NA and total counts.
@@ -362,9 +336,6 @@ labevents_tble %>%
                    # count of NAs
                    na = sum(is.na(valuenum)), 
                    N = n())
-  
-
-summary(labevents_tble$valuenum)
 ```
 There appears to be an extreme outlier in the `itemid` glucose(50913). I'll ignore some of the outliers for the graph below. The y axis limit of barplot is set to 300 for better visualization.
 ```{r}
@@ -424,12 +395,6 @@ chartevents_tble %>% print(width = Inf)
 ```
 2. Further restrict `chartevents_tble` to the first vital measurement during the ICU stay. 
 ```{r}
-chartevents_tble <- chartevents_tble %>% 
-  group_by(subject_id) %>% 
-  filter(charttime == min(charttime)) %>% 
-  print(width = Inf) %>% 
-  write_rds("chartevents_tble.rds")
-# 109913
 chartevents_tble <- chartevents_tble %>%
   left_join(select(icustays_tble, subject_id, intime), key = "subject_id") %>%
   filter(charttime >= intime) %>% 
@@ -439,7 +404,6 @@ chartevents_tble <- chartevents_tble %>%
   ungroup() %>% 
   print(width = Inf) %>% 
   write_rds("chartevents_tble.rds")
-# 263847
 ```
 
 3. Summarize these vital measurements by appropriate numerics and graphics.    
@@ -491,68 +455,498 @@ and columns contain at least following variables
 3. Spread the dataframe by `itemid`. Ignore `charttime` because it could be different across `labevents_tble` and `chartevents_tble`
 4. Define `thirty_day_mort`: `thirty_day_mort` = 0 if the patient didn't die or did die after 30 days upon admission.
 ```{r, message = FALSE}
+measurements <- rbind(
+  chartevents_tble %>% select(subject_id, itemid, valuenum),
+  labevents_tble %>% select(subject_id, itemid, valuenum)
+)
+
 mimic_icu_cohort <- icustays_tble %>% 
   # merge all dataset by `subject_id`
   left_join(patients_tble, key = "subject_id") %>% 
   left_join(., admissions_tble, key = "subject_id") %>% 
-  left_join(., labevents_tble, key = "subject_id") %>% 
-  left_join(., chartevents_tble, key = "subject_id") %>% 
-    
+  left_join(., measurments, key = "subject_id") %>% 
   mutate(
     # deathtime - admittime: time difference in mins
     diff = deathtime - admittime,
     # thirty_day_mort = 0 if diff > 30 days | is.na(diff)
     thirty_day_mort = ifelse(is.na(diff), 0, ifelse(diff < 30*24*60, 1, 0))
     ) %>% 
-  
   # filter the age at admission
   mutate(age_hadm = anchor_age + year(admittime) - anchor_year) %>% 
   filter(age_hadm > 18) %>% 
-  
-  pivot_wider(id_cols = !"charttime",
-              names_from = "itemid", values_from = "valuenum") %>% 
-  print(width = Inf)
-
-
-########################################################
-# 有些病人沒有itemid!
-
+  # create unique identifier rows
+  group_by(subject_id, itemid) %>%
+  dplyr::mutate(row = row_number()) %>%
+  pivot_wider(names_from = itemid, 
+              values_from = valuenum) %>% 
+  select(-c(row, diff)) %>% 
+  print(width = Inf) %>% 
+  write_rds("mimic_icu_cohort.rds")
 ```
 
 
 
 ## Q8. Exploratory data analysis (EDA)
 
-Summarize following information using appropriate numerics or graphs.
+Summarize following information using appropriate numerics or graphs.           
 
-- `thirty_day_mort` vs demographic variables (ethnicity, language, insurance, marital_status, gender, age at hospital admission)
+- `thirty_day_mort` vs demographic variables (ethnicity, language, insurance, marital_status, gender, age at hospital admission).     
+1. Categorical variables: ethnicity, language, insurance, marital_status, and gender
 ```{r}
-(mimic_icu_cohort)
-# frequency table
+t1 <- mimic_icu_cohort %>%
+  dplyr::count(gender, thirty_day_mort) %>% 
+  mutate(variable = paste0("gender-", gender)) %>% 
+  pivot_wider(names_from = "thirty_day_mort", values_from = "n") %>% 
+  select(variable, `0`, `1`)
+t2 <- mimic_icu_cohort %>%
+  dplyr::count(thirty_day_mort, language) %>% 
+  mutate(variable = paste0("language-", language)) %>% 
+  pivot_wider(names_from = "thirty_day_mort", values_from = "n") %>% 
+  select(variable, `0`, `1`)
+t3 <- mimic_icu_cohort %>%
+  dplyr::count(thirty_day_mort, ethnicity) %>% 
+  mutate(variable = paste0("ethnicity-", ethnicity)) %>% 
+  pivot_wider(names_from = "thirty_day_mort", values_from = "n") %>% 
+  select(variable, `0`, `1`)
+t4 <- mimic_icu_cohort %>%
+  dplyr::count(thirty_day_mort, marital_status) %>% 
+  mutate(variable = paste0("marital_status-", marital_status)) %>% 
+  pivot_wider(names_from = "thirty_day_mort", values_from = "n") %>% 
+  select(variable, `0`, `1`)
+t5 <- mimic_icu_cohort %>%
+  dplyr::count(thirty_day_mort, insurance) %>% 
+  mutate(variable = paste0("insurance-", insurance)) %>% 
+  pivot_wider(names_from = "thirty_day_mort", values_from = "n") %>% 
+  select(variable, `0`, `1`)
+
+rbind(t1,t2, t3, t4, t5) %>% 
+  knitr::kable(caption = "Frequency Table")
+```
+2. Continuous variable: age at hospital admission
+```{r}
 mimic_icu_cohort %>% 
-  select(thirty_day_mort, gender, anchor_age, ethnicity, language, 
-         marital_status) %>% 
-  group_by(thirty_day_mort, gender, anchor_age, ethnicity, language, 
-         marital_status) %>% 
-  summarise(N = n())
-# barplot
+  group_by(thirty_day_mort) %>% 
+  dplyr::summarise(min = min(age_hadm, na.rm = T),
+                   Q1 = quantile(age_hadm, .25, na.rm = T), 
+                   mean = mean(age_hadm, na.rm = T), 
+                   median = median(age_hadm, na.rm = T), 
+                   Q3 = quantile(age_hadm, .75, na.rm = T), 
+                   max = max(age_hadm, na.rm = T), 
+                   # count of NAs
+                   na = sum(is.na(age_hadm)), 
+                   N = n())
+```
+3. Barplots
+```{r}
+# gender
+mimic_icu_cohort %>%
+  dplyr::count(gender, thirty_day_mort) %>% 
+  ggplot(aes(x = thirty_day_mort, y = n, fill = gender)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Gender vs. 30-day Mortality", y = "count") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+# language
+mimic_icu_cohort %>%
+  dplyr::count(language, thirty_day_mort) %>% 
+  ggplot(aes(x = thirty_day_mort, y = n, fill = language)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Language vs. 30-day Mortality", y = "count") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+# ethnicity
+mimic_icu_cohort %>%
+  dplyr::count(ethnicity, thirty_day_mort) %>% 
+  ggplot(aes(x = thirty_day_mort, y = n, fill = ethnicity)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Ethnicity vs. 30-day Mortality", y = "count") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+# marital_status
+mimic_icu_cohort %>%
+  dplyr::count(marital_status, thirty_day_mort) %>% 
+  ggplot(aes(x = thirty_day_mort, y = n, fill = marital_status)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Marital Status vs. 30-day Mortality", y = "count") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+# insurance
+mimic_icu_cohort %>%
+  dplyr::count(insurance, thirty_day_mort) %>% 
+  ggplot(aes(x = thirty_day_mort, y = n, fill = insurance)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Insurance vs. 30-day Mortality", y = "count") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+- `thirty_day_mort` vs first lab measurements      
+1. creatinine          
+```{r}
+# summary
 mimic_icu_cohort %>% 
-  ggplot(aes(x = thirty_day_mort, y = gender)) +
-  geom_barplot() +
+  group_by(thirty_day_mort) %>% 
+  dplyr::summarise(min = min(creatinine, na.rm = T),
+                   Q1 = quantile(creatinine, .25, na.rm = T), 
+                   mean = mean(creatinine, na.rm = T), 
+                   median = median(creatinine, na.rm = T), 
+                   Q3 = quantile(creatinine, .75, na.rm = T), 
+                   max = max(creatinine, na.rm = T), 
+                   # count of NAs
+                   na = sum(is.na(creatinine)), 
+                   N = n())
+
+# histogram
+mimic_icu_cohort %>% 
+  mutate(thirty_day_mort = factor(as.character(thirty_day_mort))) %>% 
+  ggplot(aes(x = creatinine, fill = thirty_day_mort)) +
+  geom_histogram(position = "identity", binwidth = 1) +
   theme_bw()
-# histogram for each measurement by the indicator variable.
+mimic_icu_cohort
 ```
-
-- `thirty_day_mort` vs first lab measurements
+2. potassium
 ```{r}
-pivot_longer
+# summary
+mimic_icu_cohort %>% 
+  group_by(thirty_day_mort) %>% 
+  dplyr::summarise(min = min(potassium, na.rm = T),
+                   Q1 = quantile(potassium, .25, na.rm = T), 
+                   mean = mean(potassium, na.rm = T), 
+                   median = median(potassium, na.rm = T), 
+                   Q3 = quantile(potassium, .75, na.rm = T), 
+                   max = max(potassium, na.rm = T), 
+                   # count of NAs
+                   na = sum(is.na(potassium)), 
+                   N = n())
+
+# histogram
+mimic_icu_cohort %>% 
+  mutate(thirty_day_mort = factor(as.character(thirty_day_mort))) %>% 
+  ggplot(aes(x = potassium, fill = thirty_day_mort)) +
+  geom_histogram(position = "identity", binwidth = 1) +
+  theme_bw()
+mimic_icu_cohort
+```
+3. sodium
+```{r}
+# summary
+mimic_icu_cohort %>% 
+  group_by(thirty_day_mort) %>% 
+  dplyr::summarise(min = min(sodium, na.rm = T),
+                   Q1 = quantile(sodium, .25, na.rm = T), 
+                   mean = mean(sodium, na.rm = T), 
+                   median = median(sodium, na.rm = T), 
+                   Q3 = quantile(sodium, .75, na.rm = T), 
+                   max = max(sodium, na.rm = T), 
+                   # count of NAs
+                   na = sum(is.na(sodium)), 
+                   N = n())
+
+# histogram
+mimic_icu_cohort %>% 
+  mutate(thirty_day_mort = factor(as.character(thirty_day_mort))) %>% 
+  ggplot(aes(x = sodium, fill = thirty_day_mort)) +
+  geom_histogram(position = "identity", binwidth = 1) +
+  theme_bw()
+mimic_icu_cohort
+```
+4. hematocrit
+```{r}
+# summary
+mimic_icu_cohort %>% 
+  group_by(thirty_day_mort) %>% 
+  dplyr::summarise(min = min(hematocrit, na.rm = T),
+                   Q1 = quantile(hematocrit, .25, na.rm = T), 
+                   mean = mean(hematocrit, na.rm = T), 
+                   median = median(hematocrit, na.rm = T), 
+                   Q3 = quantile(hematocrit, .75, na.rm = T), 
+                   max = max(hematocrit, na.rm = T), 
+                   # count of NAs
+                   na = sum(is.na(hematocrit)), 
+                   N = n())
+
+# histogram
+mimic_icu_cohort %>% 
+  mutate(thirty_day_mort = factor(as.character(thirty_day_mort))) %>% 
+  ggplot(aes(x = hematocrit, fill = thirty_day_mort)) +
+  geom_histogram(position = "identity", binwidth = 1) +
+  theme_bw()
+mimic_icu_cohort
+```
+5. white blood cell count
+```{r}
+# summary
+mimic_icu_cohort %>% 
+  group_by(thirty_day_mort) %>% 
+  dplyr::summarise(min = min(wbcc, na.rm = T),
+                   Q1 = quantile(wbcc, .25, na.rm = T), 
+                   mean = mean(wbcc, na.rm = T), 
+                   median = median(wbcc, na.rm = T), 
+                   Q3 = quantile(wbcc, .75, na.rm = T), 
+                   max = max(wbcc, na.rm = T), 
+                   # count of NAs
+                   na = sum(is.na(wbcc)), 
+                   N = n())
+
+# histogram
+mimic_icu_cohort %>% 
+  mutate(thirty_day_mort = factor(as.character(thirty_day_mort))) %>% 
+  ggplot(aes(x = wbcc, fill = thirty_day_mort)) +
+  geom_histogram(position = "identity", binwidth = 1) +
+  theme_bw()
+mimic_icu_cohort
+```
+6. glucose
+```{r}
+# summary
+mimic_icu_cohort %>% 
+  group_by(thirty_day_mort) %>% 
+  dplyr::summarise(min = min(glucose, na.rm = T),
+                   Q1 = quantile(glucose, .25, na.rm = T), 
+                   mean = mean(glucose, na.rm = T), 
+                   median = median(glucose, na.rm = T), 
+                   Q3 = quantile(glucose, .75, na.rm = T), 
+                   max = max(glucose, na.rm = T), 
+                   # count of NAs
+                   na = sum(is.na(glucose)), 
+                   N = n())
+
+# histogram
+mimic_icu_cohort %>% 
+  mutate(thirty_day_mort = factor(as.character(thirty_day_mort))) %>% 
+  ggplot(aes(x = glucose, fill = thirty_day_mort)) +
+  geom_histogram(position = "identity", binwidth = 1) +
+  theme_bw()
+mimic_icu_cohort
+```
+7. magnesium
+```{r}
+# summary
+mimic_icu_cohort %>% 
+  group_by(thirty_day_mort) %>% 
+  dplyr::summarise(min = min(magnesium, na.rm = T),
+                   Q1 = quantile(magnesium, .25, na.rm = T), 
+                   mean = mean(magnesium, na.rm = T), 
+                   median = median(magnesium, na.rm = T), 
+                   Q3 = quantile(magnesium, .75, na.rm = T), 
+                   max = max(magnesium, na.rm = T), 
+                   # count of NAs
+                   na = sum(is.na(magnesium)), 
+                   N = n())
+
+# histogram
+mimic_icu_cohort %>% 
+  mutate(thirty_day_mort = factor(as.character(thirty_day_mort))) %>% 
+  ggplot(aes(x = magnesium, fill = thirty_day_mort)) +
+  geom_histogram(position = "identity", binwidth = 1) +
+  theme_bw()
+mimic_icu_cohort
+```
+8. calcium
+```{r}
+# summary
+mimic_icu_cohort %>% 
+  group_by(thirty_day_mort) %>% 
+  dplyr::summarise(min = min(calcium, na.rm = T),
+                   Q1 = quantile(calcium, .25, na.rm = T), 
+                   mean = mean(calcium, na.rm = T), 
+                   median = median(calcium, na.rm = T), 
+                   Q3 = quantile(calcium, .75, na.rm = T), 
+                   max = max(calcium, na.rm = T), 
+                   # count of NAs
+                   na = sum(is.na(calcium)), 
+                   N = n())
+
+# histogram
+mimic_icu_cohort %>% 
+  mutate(thirty_day_mort = factor(as.character(thirty_day_mort))) %>% 
+  ggplot(aes(x = calcium, fill = thirty_day_mort)) +
+  geom_histogram(position = "identity", binwidth = 1) +
+  theme_bw()
+mimic_icu_cohort
+```
+9. chloride
+```{r}
+# summary
+mimic_icu_cohort %>% 
+  group_by(thirty_day_mort) %>% 
+  dplyr::summarise(min = min(chloride, na.rm = T),
+                   Q1 = quantile(chloride, .25, na.rm = T), 
+                   mean = mean(chloride, na.rm = T), 
+                   median = median(chloride, na.rm = T), 
+                   Q3 = quantile(chloride, .75, na.rm = T), 
+                   max = max(chloride, na.rm = T), 
+                   # count of NAs
+                   na = sum(is.na(chloride)), 
+                   N = n())
+
+# histogram
+mimic_icu_cohort %>% 
+  mutate(thirty_day_mort = factor(as.character(thirty_day_mort))) %>% 
+  ggplot(aes(x = chloride, fill = thirty_day_mort)) +
+  geom_histogram(position = "identity", binwidth = 1) +
+  theme_bw()
+mimic_icu_cohort
+```
+10. bicarbonate
+```{r}
+# summary
+mimic_icu_cohort %>% 
+  group_by(thirty_day_mort) %>% 
+  dplyr::summarise(min = min(bicarbonate, na.rm = T),
+                   Q1 = quantile(bicarbonate, .25, na.rm = T), 
+                   mean = mean(bicarbonate, na.rm = T), 
+                   median = median(bicarbonate, na.rm = T), 
+                   Q3 = quantile(bicarbonate, .75, na.rm = T), 
+                   max = max(bicarbonate, na.rm = T), 
+                   # count of NAs
+                   na = sum(is.na(bicarbonate)), 
+                   N = n())
+
+# histogram
+mimic_icu_cohort %>% 
+  mutate(thirty_day_mort = factor(as.character(thirty_day_mort))) %>% 
+  ggplot(aes(x = bicarbonate, fill = thirty_day_mort)) +
+  geom_histogram(position = "identity", binwidth = 1) +
+  theme_bw()
+mimic_icu_cohort
 ```
 
 
-- `thirty_day_mort` vs first vital measurements
+
+- `thirty_day_mort` vs first vital measurements         
+1. heart rate
+```{r}
+# summary
+mimic_icu_cohort %>% 
+  group_by(thirty_day_mort) %>% 
+  dplyr::summarise(min = min(heart_rate, na.rm = T),
+                   Q1 = quantile(heart_rate, .25, na.rm = T), 
+                   mean = mean(heart_rate, na.rm = T), 
+                   median = median(heart_rate, na.rm = T), 
+                   Q3 = quantile(heart_rate, .75, na.rm = T), 
+                   max = max(heart_rate, na.rm = T), 
+                   # count of NAs
+                   na = sum(is.na(heart_rate)), 
+                   N = n())
+
+# histogram
+mimic_icu_cohort %>% 
+  mutate(thirty_day_mort = factor(as.character(thirty_day_mort))) %>% 
+  ggplot(aes(x = heart_rate, fill = thirty_day_mort)) +
+  geom_histogram(position = "identity", binwidth = 1) +
+  theme_bw()
+mimic_icu_cohort
+```
+2. mean non-invasive blood pressure
+```{r}
+# summary
+mimic_icu_cohort %>% 
+  group_by(thirty_day_mort) %>% 
+  dplyr::summarise(min = min(mnibp, na.rm = T),
+                   Q1 = quantile(mnibp, .25, na.rm = T), 
+                   mean = mean(mnibp, na.rm = T), 
+                   median = median(mnibp, na.rm = T), 
+                   Q3 = quantile(mnibp, .75, na.rm = T), 
+                   max = max(mnibp, na.rm = T), 
+                   # count of NAs
+                   na = sum(is.na(mnibp)), 
+                   N = n())
+
+# histogram
+mimic_icu_cohort %>% 
+  mutate(thirty_day_mort = factor(as.character(thirty_day_mort))) %>% 
+  ggplot(aes(x = mnibp, fill = thirty_day_mort)) +
+  geom_histogram(position = "identity", binwidth = 1) +
+  theme_bw()
+mimic_icu_cohort
+```
+3. systolic non-invasive blood pressure
+```{r}
+# summary
+mimic_icu_cohort %>% 
+  group_by(thirty_day_mort) %>% 
+  dplyr::summarise(min = min(snibp, na.rm = T),
+                   Q1 = quantile(snibp, .25, na.rm = T), 
+                   mean = mean(snibp, na.rm = T), 
+                   median = median(snibp, na.rm = T), 
+                   Q3 = quantile(snibp, .75, na.rm = T), 
+                   max = max(snibp, na.rm = T), 
+                   # count of NAs
+                   na = sum(is.na(snibp)), 
+                   N = n())
+
+# histogram
+mimic_icu_cohort %>% 
+  mutate(thirty_day_mort = factor(as.character(thirty_day_mort))) %>% 
+  ggplot(aes(x = snibp, fill = thirty_day_mort)) +
+  geom_histogram(position = "identity", binwidth = 1) +
+  theme_bw()
+mimic_icu_cohort
+```
+4. body temperature in Fahrenheit
+```{r}
+# summary
+mimic_icu_cohort %>% 
+  group_by(thirty_day_mort) %>% 
+  dplyr::summarise(min = min(body_temp, na.rm = T),
+                   Q1 = quantile(body_temp, .25, na.rm = T), 
+                   mean = mean(body_temp, na.rm = T), 
+                   median = median(body_temp, na.rm = T), 
+                   Q3 = quantile(body_temp, .75, na.rm = T), 
+                   max = max(body_temp, na.rm = T), 
+                   # count of NAs
+                   na = sum(is.na(body_temp)), 
+                   N = n())
+
+# histogram
+mimic_icu_cohort %>% 
+  mutate(thirty_day_mort = factor(as.character(thirty_day_mort))) %>% 
+  ggplot(aes(x = body_temp, fill = thirty_day_mort)) +
+  geom_histogram(position = "identity", binwidth = 1) +
+  theme_bw()
+mimic_icu_cohort
+```
+5. respiratory rate
+```{r}
+# summary
+mimic_icu_cohort %>% 
+  group_by(thirty_day_mort) %>% 
+  dplyr::summarise(min = min(resp, na.rm = T),
+                   Q1 = quantile(resp, .25, na.rm = T), 
+                   mean = mean(resp, na.rm = T), 
+                   median = median(resp, na.rm = T), 
+                   Q3 = quantile(resp, .75, na.rm = T), 
+                   max = max(resp, na.rm = T), 
+                   # count of NAs
+                   na = sum(is.na(resp)), 
+                   N = n())
+
+# histogram
+mimic_icu_cohort %>% 
+  mutate(thirty_day_mort = factor(as.character(thirty_day_mort))) %>% 
+  ggplot(aes(x = resp, fill = thirty_day_mort)) +
+  geom_histogram(position = "identity", binwidth = 1) +
+  theme_bw()
+mimic_icu_cohort
+```
+
 
 - `thirty_day_mort` vs first ICU unit
+```{r}
+mimic_icu_cohort %>%
+  dplyr::count(first_careunit, thirty_day_mort) %>% 
+  pivot_wider(names_from = "thirty_day_mort", values_from = "n") %>% 
+  knitr::kable(caption = "First ICU Unit vs. 30-days Mortality")
 
+mimic_icu_cohort %>%
+  dplyr::count(first_careunit, thirty_day_mort) %>% 
+  ggplot(aes(x = thirty_day_mort, y = n, fill = first_careunit)) +
+  geom_bar(stat = "identity") +
+  labs(title = "First ICU Unit vs. 30-day Mortality", y = "count") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
 
 
 
