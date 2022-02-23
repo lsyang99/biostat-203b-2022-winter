@@ -86,7 +86,7 @@ icustays_tble <- icustays_tble %>%
 ```{r}
 # # TODO
 admissions_tble <- tbl(con, "admissions") %>% 
-  semi_join("icustays_tble", by = c("subject_id", "hadm_id")) %>% 
+  semi_join(icustays_tble, by = c("subject_id", "hadm_id")) %>% 
   print(width = Inf)
 ```
 
@@ -99,25 +99,20 @@ patients_tble <- tbl(con, "patients") %>%
 # dbplyr using SQLite is much faster - lazy, not doing work
 ```
 
-6. Connect to the `labevents` table and retrieve a subset that only contain subjects who appear in `icustays_tble` and the lab items listed in HW2. 
+6. Connect to the `labevents` table and retrieve a subset that only contain subjects who appear in `icustays_tble` and the lab items listed in HW2. Only keep the first lab measurements during ICU stay and pivot lab items to become variables/columns.
 ```{r}
 # # TODO
 labevents_tble <- tbl(con, "labevents") %>% 
   semi_join(icustays_tble, by = "subject_id") %>% 
   filter(itemid %in% c(50912, 50971, 50983, 50902, 50882, 51221, 51301, 50931, 
-                       50960, 50893))
-```
-Only keep the first lab measurements during ICU stay and pivot lab items to become variables/columns.
-```{r}
-# # TODO
-labevents_tble <- labevents_tble %>% 
+                       50960, 50893)) %>% 
+  left_join(select(icustays_tble, subject_id, intime), by = "subject_id") %>%
   group_by(subject_id) %>% 
+  filter(charttime >= intime) %>% 
   slice_min(charttime) %>% 
-  pivot_wider(names_from = "itemid", values_from = "valuenum")
-  print(width = Inf)
-  
-  
-  
+  select(subject_id, itemid, valuenum) %>% 
+  collect()
+
 labevents_tble$itemid <- recode_factor(labevents_tble$itemid, 
                                        `50912` = "creatinine", 
                                        `50971` = "potassium", 
@@ -129,28 +124,43 @@ labevents_tble$itemid <- recode_factor(labevents_tble$itemid,
                                        `50931` = "glucose", 
                                        `50960` = "magnesium", 
                                        `50893` = "calcium")
+
+labevents_tble <- labevents_tble %>% 
+  group_by(subject_id, itemid) %>%
+  dplyr::mutate(row = row_number()) %>%
+  pivot_wider(names_from = "itemid", values_from = "valuenum") %>% 
+  select(-row)
 ```
 
-7. Connect to `chartevents` table and retrieve a subset that only contain subjects who appear in `icustays_tble` and the chart events listed in HW2.
+
+
+7. Connect to `chartevents` table and retrieve a subset that only contain subjects who appear in `icustays_tble` and the chart events listed in HW2. Only keep the first chart events during ICU stay and pivot chart events to become variables/columns.
 ```{r}
 # # TODO # keep everything lazy
 chartevents_tble <- tbl(con, "chartevents") %>% 
   semi_join(icustays_tble, by = "subject_id") %>% 
-  filter(itemid %in% c(220045, 220181, 220179, 223761, 220210))
-
-
+  filter(itemid %in% c(220045, 220181, 220179, 223761, 220210)) %>%
+  left_join(select(icustays_tble, subject_id, intime), by = "subject_id") %>%
+  group_by(subject_id) %>% 
+  filter(charttime >= intime) %>% 
+  slice_min(charttime) %>% 
+  select(subject_id, itemid, valuenum) %>% 
+  collect()
+  
 chartevents_tble$itemid <- recode_factor(chartevents_tble$itemid, 
                                          `220045` = "heart_rate",
                                          `220181` = "mnibp",
                                          `220179` = "snibp",
                                          `223761` = "body_temp",
                                          `220210` = "resp")
+
+chartevents_tble <- chartevents_tble %>% 
+  group_by(subject_id, itemid) %>%
+  dplyr::mutate(row = row_number()) %>%
+  pivot_wider(names_from = "itemid", values_from = "valuenum") %>% 
+  select(-row)
 ```
-Only keep the first chart events during ICU stay and pivot chart events to become variables/columns.
-```{r}
-# # TODO
-# chartevents_tble <- chartevents_tble %>% ...
-```
+
 
 8. Put things together. This step is similar to Q7 of HW2. Using one chain of pipes `%>%` to perform following data wrangling steps: (i) start with the `icustays_tble` for the first ICU stay of each unique patient, (ii) merge in admissions and patients tables, (iii) keep adults only (age at admission >= 18), (iv) merge in the labevents and chartevents tables, (v) create an indicator for 30-day mortality, (vi) save the final tibble to an `icu_cohort.rds` R data file in the `mimiciv_shiny` folder.
 #### do the `collect()` to collect result into `icu_cohort.rds`
@@ -165,6 +175,28 @@ if (!dir.exists("mimiciv_shiny")) {
 ```{r}
 # # TODO
 # icu_cohort <- icustays_tble %>% ...
+icu_cohort <- icustays_tble %>% 
+  # merge all dataset by `subject_id`
+  left_join(patients_tble, by = "subject_id") %>% 
+  left_join(., admissions_tble, by = "subject_id") %>% 
+  collect() %>% 
+  
+  mutate(
+    # dod - admittime: time difference in mins
+    diff = dod - admittime,
+    # thirty_day_mort = 0 if diff > 30 days | is.na(diff)
+    thirty_day_mort = ifelse(is.na(diff), 0, ifelse(diff < 30*24*60, 1, 0))
+    ) %>% 
+  
+  # filter the age at admission
+  mutate(age_hadm = anchor_age + year(admittime) - anchor_year) %>% 
+  filter(age_hadm > 18) %>% 
+  select(-diff) %>% 
+  
+  left_join(., labevents_tble, by = "subject_id") %>% 
+  left_join(., chartevents_tble, by = "subject_id")
+readr::write_rds(icu_cohort, "icu_cohort.rds")
+
 ```
 
 Close database connection and clear workspace.
@@ -176,4 +208,106 @@ rm(list = ls())
 ## Q2. Shiny app
 
 Develop a Shiny app for exploring the ICU cohort data created in Q1. The app should reside in the `mimiciv_shiny` folder. The app should provide easy access to the graphical and numerical summaries of variables (demographics, lab measurements, vitals) in the ICU cohort.
+```{r, echo = FALSE}
+library(ggplot2)
+library(shiny)
+```
+
+##### Shiny text
+```{r, echo = F}
+browseURL('https://shiny.rstudio.com/articles/basics.html')
+```
+
+# Summary of demographics and lab/vital measurements
+```{r, echo = FALSE}
+# Define UI for dataset viewer app ----
+ui <- fluidPage(
+
+  # App title ----
+  titlePanel("Summary"),
+
+  # Sidebar layout with input and output definitions ----
+  sidebarLayout(
+
+    # Sidebar panel for inputs ----
+    sidebarPanel(
+
+      # Input: Select a variable ----
+      selectInput("variable", "Choose a variable:",
+                  choices = c("subject_id", "intime", "hadm_id_x", "stay_id",
+                              "first_careunit", 
+"last_careunit", "outtime", "los", "gender", "anchor_age", "anchor_year", 
+"anchor_year_group", "dod", "hadm_id_y", "admittime", "dischtime", 
+"deathtime", "admission_type", "admission_location", "discharge_location", 
+"insurance", "language", "marital_status", "ethnicity", "edregtime", 
+"edouttime", "hospital_expire_flag", "thirty_day_mort", "age_hadm", 
+"sodium", "hematocrit", "wbcc", "chloride", "bicarbonate", "glucose", 
+"calcium", "potassium", "creatinine", "magnesium", "snibp", "body_temp", 
+"heart_rate", "resp", "mnibp")),
+
+      # Input: Specify the number of observations to view ----
+      numericInput("obs", "Number of observations to view:", 10),
+
+      # Include clarifying text ----
+      helpText("Note: while the data view will show only the specified",
+               "number of observations, the summary will still be based",
+               "on the full dataset."),
+
+      # Input: actionButton() to defer the rendering of output ----
+      # until the user explicitly clicks the button (rather than
+      # doing it immediately when inputs change). This is useful if
+      # the computations required to render output are inordinately
+      # time-consuming.
+      actionButton("update", "Update View")
+
+    ),
+
+    # Main panel for displaying outputs ----
+    mainPanel(
+
+      # Output: Header + summary of distribution ----
+      h4("Summary"),
+      verbatimTextOutput("summary"),
+
+      # Output: Header + table of distribution ----
+      h4("Observations"),
+      tableOutput("view")
+    )
+
+  )
+)
+
+# Define server logic to summarize and view selected dataset ----
+server <- function(input, output) {
+
+  # Return the requested dataset ----
+  # Note that we use eventReactive() here, which depends on
+  # input$update (the action button), so that the output is only
+  # updated when the user clicks the button
+  datasetInput <- eventReactive(input$update, {
+    switch(input$dataset,
+           "rock" = rock,
+           "pressure" = pressure,
+           "cars" = cars)
+  }, ignoreNULL = FALSE)
+
+  # Generate a summary of the dataset ----
+  output$summary <- renderPrint({
+    dataset <- datasetInput()
+    summary(dataset)
+  })
+
+  # Show the first "n" observations ----
+  # The use of isolate() is necessary because we don't want the table
+  # to update whenever input$obs changes (only when the user clicks
+  # the action button)
+  output$view <- renderTable({
+    head(datasetInput(), n = isolate(input$obs))
+  })
+
+}
+
+# Create Shiny app ----
+shinyApp(ui, server)
+```
 
