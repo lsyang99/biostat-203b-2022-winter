@@ -82,7 +82,7 @@ icustays_tble <- icustays_tble %>%
 ```
 
 
-4. Connect to the `admissions` table and only keep the patients who have a match in `icustays_tble` (according to `subject_id` and `hadm_id`).
+4. Connect to the `admissions` table and only keep the patients who have a match in `icustays_tble` (according to `subject_id` and `hadm_id`).             
 **Answer:**
 ```{r}
 # # TODO
@@ -91,7 +91,7 @@ admissions_tble <- tbl(con, "admissions") %>%
   print(width = Inf)
 ```
 
-5. Connect to the `patients` table and only keep the patients who have a match in `icustays_tble` (according to `subject_id`).                   
+5. Connect to the `patients` table and only keep the patients who have a match in `icustays_tble` (according to `subject_id`).                                
 **Answer:**
 ```{r, warning = F, message = F}
 # # TODO
@@ -134,7 +134,7 @@ labevents_tble <- labevents_tble %>%
 ```
 
 
-7. Connect to `chartevents` table and retrieve a subset that only contain subjects who appear in `icustays_tble` and the chart events listed in HW2. Only keep the first chart events during ICU stay and pivot chart events to become variables/columns.                   
+7. Connect to `chartevents` table and retrieve a subset that only contain subjects who appear in `icustays_tble` and the chart events listed in HW2. Only keep the first chart events during ICU stay and pivot chart events to become variables/columns.                    
 **Answer:**
 ```{r, warning = F, message = F}
 # # TODO # keep everything lazy
@@ -163,7 +163,7 @@ chartevents_tble <- chartevents_tble %>%
 ```
 
 
-8. Put things together. This step is similar to Q7 of HW2. Using one chain of pipes `%>%` to perform following data wrangling steps: (i) start with the `icustays_tble` for the first ICU stay of each unique patient, (ii) merge in admissions and patients tables, (iii) keep adults only (age at admission >= 18), (iv) merge in the labevents and chartevents tables, (v) create an indicator for 30-day mortality, (vi) save the final tibble to an `icu_cohort.rds` R data file in the `mimiciv_shiny` folder.
+8. Put things together. This step is similar to Q7 of HW2. Using one chain of pipes `%>%` to perform following data wrangling steps: (i) start with the `icustays_tble` for the first ICU stay of each unique patient, (ii) merge in admissions and patients tables, (iii) keep adults only (age at admission >= 18), (iv) merge in the labevents and chartevents tables, (v) create an indicator for 30-day mortality, (vi) save the final tibble to an `icu_cohort.rds` R data file in the `mimiciv_shiny` folder.                      
 **Answer:**
 ```{r, warning = F, message = F}
 # make a directory mimiciv_shiny
@@ -195,7 +195,7 @@ icu_cohort <- icustays_tble %>%
   left_join(., labevents_tble, by = "subject_id") %>% 
   left_join(., chartevents_tble, by = "subject_id")
 ```
-Add a categorical variable for age at admission `age_cate` and other admission time variables for further purposes.
+Add a categorical variable for age at admission `age_cate` and other admission time variables for further purposes. Save data as `icu_cohort.rds`.  
 ```{r, warning = F, message = F}
 icu_cohort <- icu_cohort %>% 
   mutate(
