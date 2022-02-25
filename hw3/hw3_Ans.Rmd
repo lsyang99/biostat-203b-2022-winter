@@ -64,14 +64,14 @@ dbListTables(con)
 ```
 
 3. Connect to the `icustays` table.
-```{r}
+```{r, warning = F, message = F}
 # full ICU stays table
 icustays_tble <- tbl(con, "icustays") %>%
   show_query() %>%
   print(width = Inf)
 ```
 We only keep the first ICU stay. Following code is kind of a hack, using the `summarise_all(min)` function. It seems that `slice_min()`, `slice_head()`, `distinct(, .keep_all = TRUE)` don't work with `dbplyr`+`bigrquery` at the moment.
-```{r}
+```{r, warning = F, message = F}
 icustays_tble <- icustays_tble %>% 
   select(subject_id, intime) %>% 
   group_by(subject_id) %>% 
@@ -83,7 +83,7 @@ icustays_tble <- icustays_tble %>%
 
 
 4. Connect to the `admissions` table and only keep the patients who have a match in `icustays_tble` (according to `subject_id` and `hadm_id`).
-### Answer:
+**Answer:**
 ```{r}
 # # TODO
 admissions_tble <- tbl(con, "admissions") %>% 
@@ -92,16 +92,16 @@ admissions_tble <- tbl(con, "admissions") %>%
 ```
 
 5. Connect to the `patients` table and only keep the patients who have a match in `icustays_tble` (according to `subject_id`).                   
-### Answer:
-```{r}
+**Answer:**
+```{r, warning = F, message = F}
 # # TODO
 patients_tble <- tbl(con, "patients") %>% 
   semi_join(icustays_tble, by = "subject_id")
 ```
 
 6. Connect to the `labevents` table and retrieve a subset that only contain subjects who appear in `icustays_tble` and the lab items listed in HW2. Only keep the first lab measurements during ICU stay and pivot lab items to become variables/columns.                            
-### Answer:
-```{r}
+**Answer:**
+```{r, warning = F, message = F}
 # # TODO
 labevents_tble <- tbl(con, "labevents") %>% 
   semi_join(icustays_tble, by = "subject_id") %>% 
@@ -135,8 +135,8 @@ labevents_tble <- labevents_tble %>%
 
 
 7. Connect to `chartevents` table and retrieve a subset that only contain subjects who appear in `icustays_tble` and the chart events listed in HW2. Only keep the first chart events during ICU stay and pivot chart events to become variables/columns.                   
-### Answer:
-```{r}
+**Answer:**
+```{r, warning = F, message = F}
 # # TODO # keep everything lazy
 chartevents_tble <- tbl(con, "chartevents") %>% 
   semi_join(icustays_tble, by = "subject_id") %>% 
@@ -165,14 +165,14 @@ chartevents_tble <- chartevents_tble %>%
 
 8. Put things together. This step is similar to Q7 of HW2. Using one chain of pipes `%>%` to perform following data wrangling steps: (i) start with the `icustays_tble` for the first ICU stay of each unique patient, (ii) merge in admissions and patients tables, (iii) keep adults only (age at admission >= 18), (iv) merge in the labevents and chartevents tables, (v) create an indicator for 30-day mortality, (vi) save the final tibble to an `icu_cohort.rds` R data file in the `mimiciv_shiny` folder.
 **Answer:**
-```{r}
+```{r, warning = F, message = F}
 # make a directory mimiciv_shiny
 if (!dir.exists("mimiciv_shiny")) {
   dir.create("mimiciv_shiny")
 }
 ```
 
-```{r}
+```{r, warning = F, message = F}
 # # TODO
 icu_cohort <- icustays_tble %>% 
   # merge all dataset by `subject_id`
@@ -195,15 +195,18 @@ icu_cohort <- icustays_tble %>%
   left_join(., labevents_tble, by = "subject_id") %>% 
   left_join(., chartevents_tble, by = "subject_id")
 ```
-Add a categorical variable for age at admission `age_cate` for further purposes.
-```{r}
+Add a categorical variable for age at admission `age_cate` and other admission time variables for further purposes.
+```{r, warning = F, message = F}
 icu_cohort <- icu_cohort %>% 
   mutate(
-    age_cate = cut(age_hadm, breaks = c(0, 20, 30, 40, 50, 60, 70, 80, Inf), 
-                   labels = c("0-20", "21-30", "31-40", "41-50", "51-60", 
-                              "61-70", "71-80", "80+")),
+    age_cate = cut(age_hadm, breaks = c(0, 20, 30, 40, 50, 60, 70, 80, Inf), labels = c("0-20", "21-30", "31-40", "41-50", "51-60", "61-70", "71-80", "80+")),
+    year = year(admittime),
+    month = month(admittime),
+    wday = wday(admittime, label = TRUE),
+    hour = hour(admittime),
     thirty_day_mort = factor(as.character(thirty_day_mort))
     )
+
 readr::write_rds(icu_cohort, "mimiciv_shiny/icu_cohort.rds")
 ```
 
@@ -217,199 +220,6 @@ rm(list = ls())
 ## Q2. Shiny app
 
 Develop a Shiny app for exploring the ICU cohort data created in Q1. The app should reside in the `mimiciv_shiny` folder. The app should provide easy access to the graphical and numerical summaries of variables (demographics, lab measurements, vitals) in the ICU cohort.                          
-```{r, echo = F}
-library(shiny) ; library(ggplot2)
-ui <- fluidPage(
-  titlePanel("DataTable"),
 
-  # Create a new Row in the UI for selectInputs
-  fluidRow(
-    column(4,
-        selectInput("age_cate",
-                    "Age:",
-                    c("All",
-                      unique(as.character(icu_cohort$age_cate))))
-    ),
-    column(4,
-        selectInput("gender",
-                    "Gender:",
-                    c("All",
-                      unique(as.character(icu_cohort$gender))))
-    ),
-    column(4,
-        selectInput("ethnicity",
-                    "Ethnicity:",
-                    c("All",
-                      unique(as.character(icu_cohort$ethnicity))))
-    ),
-    column(4,
-        selectInput("thirty_day_mort",
-                    "30-Day Mortality:",
-                    c("All",
-                      unique(as.character(icu_cohort$thirty_day_mort))))
-    )
-  ),
-  # Create a new row for the table.
-  DT::dataTableOutput("table")
-)
-
-server <- function(input, output) {
-
-  # Filter data based on selections
-  output$table <- DT::renderDataTable(DT::datatable({
-    data <- icu_cohort
-    if (input$age_cate != "All") {
-      data <- data[data$age_cate == input$age_cate,]
-    }
-    if (input$gender != "All") {
-      data <- data[data$gender == input$gender,]
-    }
-    if (input$ethnicity != "All") {
-      data <- data[data$ethnicity == input$ethnicity,]
-    }
-    if (input$thirty_day_mort != "All") {
-      data <- data[data$thirty_day_mort == input$thirty_day_mort,]
-    }
-    data
-  }))
-
-}
-# Create Shiny app ----
-shinyApp(ui, server)
-```
-
-```{r, echo = F}
-
-
-### barplot
-ui <- fluidPage(    
-  
-  # Give the page a title
-  titlePanel("Barplot by Measurements"),
-  
-  # Generate a row with a sidebar
-  sidebarLayout(      
-    
-    # Define the sidebar with one input
-    sidebarPanel(
-      selectInput("demo", "Demographic variables:", 
-                  choices = c("age_cate", "gender", "insurance", "language", "marital_status", "ethnicity")),
-      hr(),
-      helpText(" ")
-    ),
-    
-    # Create a spot for the barplot
-    mainPanel(
-      h4("Plot"),
-      plotOutput("BoxPlot")
-    )
-    
-  )
-)
-# Define a server for the Shiny app
-server <- function(input, output) {
-  
-  # ggplot - barplot
-  output$BoxPlot <- renderPlot({
-    icu_cohort %>% 
-    ggplot(aes(x = thirty_day_mort, fill = .data[[input$demo]])) + 
-    geom_bar(position = "dodge2") + 
-    labs(title = "Demographics by 30-Day Mortality") +
-    xlab("30-Day Mortality") +
-    theme_minimal() +
-    theme(plot.title = element_text(hjust = 0.5))
-  })
-
-
- }
-
-shinyApp(ui, server)
-```
-
-```{r, echo = F}
-# Define UI for dataset viewer app ----
-ui <- fluidPage(
-
-  # App title ----
-  titlePanel("Summary of Lab/Vital Measurements"),
-
-  # Sidebar layout with input and output definitions ----
-  sidebarLayout(
-
-    # Sidebar panel for inputs ----
-    sidebarPanel(
-
-      # Input: Select a dataset ----
-      selectInput("meas", "Choose a measurement:",
-                  choices = c("sodium", "hematocrit", "wbcc", "chloride", "bicarbonate", "glucose", "calcium", "potassium", "creatinine", "magnesium", "snibp", "body_temp", "heart_rate", "resp", "mnibp")),
-      selectInput("var", "Choose a covariate:",
-                  choices = c("N/A", "age_cate", "thirty_day_mort", "gender", "ethnicity")),
-
-
-
-      # # Include clarifying text ----
-      # helpText("Note: while the data view will show only the specified",
-      #          "number of observations, the summary will still be based",
-      #          "on the full dataset."),
-
-    ),
-
-    # Main panel for displaying outputs ----
-    mainPanel(
-      # Output: Header + table of distribution ----
-      h4("Plot"),
-      plotOutput("HistogramPlot"),
-      # Output: Header + summary of distribution ----
-      h4("Summary"),
-      verbatimTextOutput("summary")
-    )
-
-  )
-)
-
-# Define server logic to summarize and view selected dataset ----
-server <- function(input, output) {
-
-  # Return the requested dataset ----
-  # Note that we use eventReactive() here, which depends on
-  # input$update (the action button), so that the output is only
-  # updated when the user clicks the button
-  # Generate a summary of the dataset ----
-  output$HistogramPlot <- renderPlot({
-    if(input$var == "N/A"){
-      icu_cohort %>% 
-        ggplot(aes(x = .data[[input$meas]])) + 
-        geom_freqpoly(size = 0.9) + 
-        labs(xlab = input$var, ylab = "Count") + 
-        theme_minimal() +
-        theme(plot.title = element_text(hjust = 0.5))
-      
-    }else{
-      icu_cohort %>% 
-        ggplot(aes(x = .data[[input$meas]], color = factor(as.character(.data[[input$var]])))) + 
-        geom_freqpoly(size = 0.9) + 
-        labs(xlab = input$var, ylab = "Count", color = input$var) + 
-        theme_minimal() +
-        theme(plot.title = element_text(hjust = 0.5))
-
-    }
-    
-  })
-  
-  
-  output$summary <- renderPrint({
-    if(input$var == "N/A"){
-      summary(icu_cohort[, input$meas])
-    }else{
-      by(icu_cohort[, input$meas], icu_cohort[, input$var], summary)
-    }
-    
-    
-  })
-}
-
-# Create Shiny app ----
-shinyApp(ui, server)
-```
 
 
