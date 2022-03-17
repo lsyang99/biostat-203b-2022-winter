@@ -1,0 +1,201 @@
+---
+title: "Biostat 203B Homework 4"
+subtitle: Due Mar 18 @ 11:59PM
+author: Lin-Syuan Yang
+output:
+  # ioslides_presentation: default
+  html_document:
+    toc: true
+    toc_depth: 4
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+```
+
+Display machine information:
+```{r}
+sessionInfo()
+```
+Load database libraries and the tidyverse frontend:
+```{r}
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(lubridate))
+suppressPackageStartupMessages(library(miceRanger))
+```
+
+## Q1. Missing data
+
+Through the Shiny app developed in HW3, we observe abundant missing values in the MIMIC-IV ICU cohort we created. In this question, we use multiple imputation to obtain a data set without missing values.
+
+0. Read following tutorials on the R package miceRanger for imputation: <https://github.com/farrellday/miceRanger>, <https://cran.r-project.org/web/packages/miceRanger/vignettes/miceAlgorithm.html>.
+
+    A more thorough book treatment of the practical imputation strategies is the book [*_Flexible Imputation of Missing Data_*](https://stefvanbuuren.name/fimd/) by Stef van Buuren. 
+
+1. Explain the jargon MCAR, MAR, and MNAR.                          
+**Ans:**                
+*MCAR*: "Missing completely at random" describes the condition when every data point has the same chance of being missing. The probability of being missing is not related to any variables in the data set.
+*MAR*: "Missing at random" refers to a missingness which is attributed to variable(s) in the data set. For example, people with lower income may tend not to see a dentist and hence there will be missing data of low-income groups in the dental record. We are able to observe this association as the number of dental record would be less for the low-income group than the high-income group.
+*MNAR*: "Missing not at random" means that the missingness is neither MCAR nor MAR. MNAR happens when there is an unknown cause of the missingness, i.e. the missingness is due to an unobserved. For example, people who have obesity may tend not to report their weights and hence there is missingness of weights. We would not know whether people have this tendency since we do not have the weight data.
+
+
+
+2. Explain in a couple of sentences how the Multiple Imputation by Chained Equations (MICE) work.      
+**Ans:**                  
+MICE is an algorithm for imputing missing data. It fills in the missing data column by column with a series of predictive models. In each imputation, MICE imputes missing data of one variable using the other variables in the dataset with one predictive model. The iteration continues for all variables with all predictive model (usually no more than 5 models).
+
+
+3. Perform a data quality check of the ICU stays data. Discard variables with substantial missingness, say >5000 `NA`s. Replace apparent data entry errors by `NA`s.              
+**Ans:**         
+```{r, message = FALSE, warning = FALSE, eval = F}
+# Load the RDS file made in HW3
+url <- '/home/lsyang/biostat-203b-2022-winter/hw4/icu_cohort.rds'
+icu_cohort <- readRDS(url)
+icu_cohort <- icu_cohort %>% 
+  mutate(thirty_day_mort = ifelse(is.na(thirty_day_mort), 0, thirty_day_mort))
+  
+# Calculate NA counts of each column
+t <- colSums(is.na(icu_cohort))
+# Get the column name if NA counts > 5000 
+name <- t[t > 5000] %>% names
+# Remove these columns except for 'thirty_day_mort'
+icu_cohort <- icu_cohort %>% 
+  select(-name[1 : 4])
+ 
+# Replace outliers of measurements by NA
+# If value > Q3 + 1.5 iqr or value < -1.5 iqr + Q1, then return NA
+replaceNA <- function(x){
+  q <- quantile(x, probs = c(.25, .75), na.rm = T)
+  iqr <- q[2] - q[1]
+  LL <- q[2] - iqr
+  UL <- q[4] + iqr
+  x[x < LL] <- NA
+  x[x > UL] <- NA
+  x
+}
+# All measurements
+vlist = c("hematocrit", "magnesium", "sodium", "chloride", "calcium", 
+          "WBC_count", "bicarbonate", "creatinine", "potassium", "glucose", 
+          "body_temperature", "systolic_non_invasive_blood_pressure", 
+          "heart_rate", "mean_non_invasive_blood_pressure", "respiratory_rate")
+icu_cohort <- icu_cohort %>% 
+  mutate_at(.vars = vars(vlist), .fun = replaceNA)
+
+```
+
+4. Impute missing values by `miceRanger` (request $m=3$ data sets). This step is computational intensive. Make sure to save the imputation results as a file. Hint: Setting `max.depth=10` in the `miceRanger` function may cut some computing time.  
+**Ans:**              
+```{r, message = FALSE, warning = FALSE, eval = F}
+# Keep the variaibles we want for imputation and prediction
+icu_sub <- icu_cohort %>% 
+  mutate(
+    gender = ifelse(icu_cohort$gender == 'F', 0, 1),
+    marital_status = icu_cohort$marital_status %>% factor %>% as.numeric,
+    ethnicity = icu_cohort$ethnicity %>% factor %>% as.numeric
+  ) %>% 
+  select(gender, marital_status, ethnicity, age_hadm, vlist, thirty_day_mort)
+
+MeanMatch <- miceRanger(icu_sub, valueSelector = 'meanMatch', m = 3, 
+                        returnModels = FALSE, verbose = FALSE, max.depth = 10)
+
+write_rds(MeanMatch, '/home/lsyang/biostat-203b-2022-winter/hw4/MeanMatch.rds')
+rm(icu_cohort) ; rm(icu_sub)
+```
+
+
+
+5. Make imputation diagnostic plots and explain what they mean.      
+**Ans:**      
+First, we can compare the imputed distributions (in black) with the original distribution (in red) for each variable.                               
+```{r, message = FALSE, warning = FALSE}
+MeanMatch <- read_rds('/home/lsyang/biostat-203b-2022-winter/hw4/MeanMatch.rds')
+plotDistributions(MeanMatch, vars = 'allNumeric')
+```
+
+Second, we compare the correlations between the imputed distributions (in black) with the original distribution (in red) for each variable.                         
+```{r, message = FALSE, warning = FALSE}
+plotCorrelations(MeanMatch, vars = 'allNumeric')
+```
+
+Third, we look at the means and standard seviation of each imputed variable.
+```{r, message = FALSE, warning = FALSE}
+plotVarConvergence(MeanMatch, vars = 'allNumeric')
+```
+
+
+
+6. Choose one of the imputed data sets to be used in Q2. This is **not** a good idea to use just one imputed data set or to average multiple imputed data sets. Explain in a couple of sentences what the correct Multiple Imputation strategy is.       
+**Ans:**            
+Using single imputed data set or an average of multiple imputed data sets would leave a lot of variability unexplained. Multiple imputation strategy is more favored as it repeatedly imputing missing data. By having multiple imputed data set it allows us to consider both the within-imputation and between-imputation variability.
+```{r, message = FALSE, warning = FALSE}
+obj <- completeData(MeanMatch)$Dataset_1
+```
+
+
+## Q2. Predicting 30-day mortality
+
+Develop at least two analytic approaches for predicting the 30-day mortality of patients admitted to ICU using demographic information (gender, age, marital status, ethnicity), first lab measurements during ICU stay, and first vital measurements during ICU stay. For example, you can use (1) logistic regression (`glm()` function in base R or keras), (2) logistic regression with lasso penalty (glmnet or keras package), (3) random forest (randomForest package), or (4) neural network (keras package).
+
+1. Partition data into 80% training set and 20% test set. Stratify partitioning according the 30-day mortality status.             
+**Ans:**            
+```{r, message = FALSE, warning = FALSE, results = 'hide'}
+# Split the data to train and test sets proportional to 30-day mortality status.
+obj <- obj[order(obj$thirty_day_mort), ]
+n_0 <- nrow(obj[obj$thirty_day_mort == 0, ])
+split_1 <- round(nrow(obj[obj$thirty_day_mort == 1, ]) * 0.80)
+split_0 <- round(nrow(obj[obj$thirty_day_mort == 0, ]) * 0.80)
+train0 <- obj[1 : split_0, ]
+train1 <- obj[(n_0 + 1) : (n_0 + 1 + split_1), ]
+train <- rbind(train1, train0)
+x <- rownames(train) %>% as.numeric %>% dput
+test <- obj[-x, ] 
+```
+
+2. Train the models using the training set.         
+**Ans:**            
+```{r, message = FALSE, warning = FALSE}
+# 1. logistic regression
+glm <- glm(
+  thirty_day_mort ~ gender + marital_status + ethnicity + age_hadm + 
+    hematocrit + magnesium + sodium + chloride + calcium + WBC_count + 
+    bicarbonate + creatinine + potassium + glucose + body_temperature +
+    systolic_non_invasive_blood_pressure + heart_rate + 
+    mean_non_invasive_blood_pressure + respiratory_rate, 
+  family = 'binomial', data = train
+  )
+
+# 2. random forest
+library(randomForest)
+rf <- randomForest(
+  thirty_day_mort ~ gender + marital_status + ethnicity + age_hadm + 
+    hematocrit + magnesium + sodium + chloride + calcium + WBC_count + 
+    bicarbonate + creatinine + potassium + glucose + body_temperature +
+    systolic_non_invasive_blood_pressure + heart_rate + 
+    mean_non_invasive_blood_pressure + respiratory_rate, 
+  data = train
+  )
+```
+
+3. Compare model prediction performance on the test set.                 
+**Ans:**            
+```{r, message = FALSE, warning = FALSE}
+# Predict the probability of having 30-day mortality 
+pred_glm <- predict(glm, test, type = 'response')
+pred_rf <- predict(rf, test, type = 'response')
+
+# Run a ROC curve to compare model performance
+library(ROSE)
+```
+
+(1) Logistic Regression:                    
+```{r, message = FALSE, warning = FALSE}
+roc.curve(test$thirty_day_mort, pred_glm)
+```
+
+(2) Random Forest:           
+```{r, message = FALSE, warning = FALSE}
+roc.curve(test$thirty_day_mort, pred_rf)
+```
+0.949 > 0.826. From the ROC curve and their AUCs we conclude that random forest algorithm performs better than logistic regression.           
+
+
